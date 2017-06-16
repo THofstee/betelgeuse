@@ -1,5 +1,7 @@
 local inspect = require 'inspect'
 
+-- @todo: fix type representation
+
 local function uint32()
    return { type = 'uint32', kind = 'type' }
 end
@@ -92,24 +94,24 @@ local function mul()
    return f
 end
 
-local function map(f, d)
-   local I = {}
-   I.map = { f = f, d = d }
-   if d.type == 'array2d' then
-	  I.type = array2d(f.type(d.array2d.type), d.array2d.w, d.array2d.h)
-   else
-	  I.type = array(f.type(d.array.type), d.array.n)
+local function typeof(t)
+   if t == nil then assert(false, "error: nil type ")
+   elseif t.array2d then return 'array2d'
+   elseif t.array   then return 'array'
+   else assert(false, "unknown type: " .. t)
    end
-   I.kind = 'map'
-   return I
 end
 
-local function map2(f)
+local function elem_type(t)
+   return t[typeof(t)].type
+end
+
+local function map(f)
    local I = {}
    I.map = f
    I.type = function(d)
-	  if d.type == 'array2d' then
-		 return array2d(f.type(d.array2d.type), d.array2d.w, d.array2d.h)
+	  if typeof(d.type) == 'array2d' then
+		 return array2d(f.type({type = elem_type(d.type)}), d.type.array2d.w, d.type.array2d.h)
 	  else
 		 return array(f.type(d.array.type), d.array.n)
 	  end
@@ -137,16 +139,18 @@ end
 -- print_type(stencil())
 -- print_type(apply(stencil(), {I = I, w = 3, h = 3}))
 
+-- outdated
 -- print(inspect(map(mul(), I)))
 
--- print(inspect(apply(map2(mul()), I)))
+-- outdated
+-- print(inspect(apply(map(mul()), I)))
 
 print(inspect(I))
 print(inspect(apply(stencil(), {I = I, w = 3, h = 3})))
-print(inspect(apply(map2(map2(mul())), apply(stencil(), {I = I, w = 3, h = 3}))))
+print(inspect(apply(map(map(mul())), apply(stencil(), {I = I, w = 3, h = 3}))))
 
-local test = map2(map2(mul()))
-setmetatable(test, { __call == function(t, args) apply(t, args) end })
+local test = map(map(mul()))
+setmetatable(test, { __call = function(t, args) return apply(t, args) end })
 print(inspect(test(apply(stencil(), { I = I, w = 3, h = 3 }))))
 
 -- two ideas:
@@ -156,3 +160,4 @@ print(inspect(test(apply(stencil(), { I = I, w = 3, h = 3 }))))
 -- alternative ideas:
 -- 1. same as above but creates a graph.
 -- 2. the function calls instantiate modules as we go
+
