@@ -129,14 +129,8 @@ local function map(f)
    I.type = function(d)
 	  if typeof(d) == 'array2d' then
 		 return array2d(f.type({type = elem_type(d.type)}), d.type.array2d.w, d.type.array2d.h)
-	  elseif typeof(d) == 'array' then
+	  else
 		 return array(f.type(d.array.type), d.array.n)
-	  elseif typeof(d) == 'tuple' then
-		 if typeof(d.a) == 'array2d' then
-			return array2d(f.type({ a = d.a.type, b = d.b.type}), d.a.type.array2d.w, d.a.type.array2d.h)
-		 else
-			return array(f.type(d.a.array.type), d.a.array.n)
-		 end
 	  end
    end
    I.kind = 'map'
