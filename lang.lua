@@ -98,7 +98,7 @@ local function typeof(t)
    if t == nil then assert(false, "error: nil type ")
    elseif t.array2d then return 'array2d'
    elseif t.array   then return 'array'
-   elseif t.type    then return typeof(t.type)
+   elseif type(t.type) == 'table' then return typeof(t.type)
    elseif t.tuple   then return 'tuple'
    elseif t.kind == 'type' then return t.type
    else assert(false, "unknown type: " .. inspect(t))
@@ -109,6 +109,7 @@ local function mul()
    local f = {}
 
    f.type = function(d)
+	  -- @todo make this just d instead of d.type
 	  assert(typeof(d.type) == 'tuple')
 	  assert(typeof(d.type.tuple.a) == typeof(d.type.tuple.b))
 	  return d.type.tuple.a
@@ -123,11 +124,13 @@ local function elem_type(t)
    return t[typeof(t)].type
 end
 
+-- [a] -> [b]
 local function map(f)
    local I = {}
    I.map = f
    I.type = function(d)
 	  if typeof(d) == 'array2d' then
+		 -- @todo make it just elem_type(d.type) instead of the table
 		 return array2d(f.type({type = elem_type(d.type)}), d.type.array2d.w, d.type.array2d.h)
 	  else
 		 return array(f.type(d.array.type), d.array.n)
@@ -141,15 +144,25 @@ local function tuple(a, b)
    return { tuple = { a = a, b = b }, kind = 'type' }
 end
 
+-- ([a], [b]) -> [(a, b)]
 local function zip()
    local I = {}
 
    I.type = function(d)
-	  assert(typeof(d.a) == typeof(d.b)) -- both need to be same type of array, either both array2d or normal array, elem_type can differ
-	  if typeof(d.a) == 'array2d' then
-		 return array2d(tuple(elem_type(d.a.type), elem_type(d.b.type)), d.a.type.array2d.w, d.a.type.array2d.h)
+	  -- @todo make this just d instead of d.type
+	  if d.type then d = d.type end
+	  assert(typeof(d.tuple.a) == typeof(d.tuple.b)) -- both need to be same type of array, either both array2d or normal array, elem_type can differ
+
+	  -- @todo remove this jank hack
+	  local a = d.tuple.a
+	  if type(a.type) == 'table' then a = a.type end
+	  local b = d.tuple.b
+	  if type(b.type) == 'table' then b = b.type end
+	  
+	  if typeof(d.tuple.a) == 'array2d' then
+		 return array2d(tuple(elem_type(a), elem_type(b)), a.array2d.w, b.array2d.h)
 	  else
-		 return array(tuple(elem_type(d.a.type), elem_type(d.b.type)), d.a.type.array.n)
+		 return array(tuple(elem_type(a), elem_type(b)), a.array.n)
 	  end
    end
 
@@ -209,12 +222,14 @@ local I = array2d(uint32(), 1920, 1080) -- declare in image 1920x1080, type = ui
 local taps = array2d(uint32(), 3, 3)    -- create 3x3 taps, type = uint32[3x3]
 local st = apply(stencil(), { I = I, w = 3, h = 3 }) -- apply a stencil on the image, type = uint32[3x3][1920x1080]
 local wt = apply(broadcast(), { type = taps, w = 1920, h = 1080 }) -- broadcast the taps to 1920x1080, type = uint32[3x3][1920x1080]
-print(inspect(st.type))
-print(inspect(wt.type))
--- local st_wt = apply(zip(), { a = st, b = wt }) -- type = {uint32[3x3], uint32[3x3]}[1920x1080]
-local st_wt = apply(map(zip()), { a = st, b = wt }) -- type = {uint32, uint32}[3x3][1920x1080]
-print(inspect(st_wt.type))
--- local m = apply(map(map(mul())), st_wt)
+-- print(inspect(st.type))
+-- print(inspect(wt.type))
+local st_wt = apply(zip(), tuple(st, wt)) -- type = {uint32[3x3], uint32[3x3]}[1920x1080]
+-- print(inspect(st_wt.type))
+local st_wt_elem = apply(map(zip()), st_wt) -- type = {uint32, uint32}[3x3][1920x1080]
+print(inspect(st_wt_elem.type))
+local m = apply(map(map(mul())), st_wt_elem)
+print(inspect(m.type))
 
 -- two ideas:
 -- 1. make the functions create an AST
