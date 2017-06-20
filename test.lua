@@ -32,7 +32,6 @@ Module = mul
 #       | lift # dont know how to treat this yet
        | chain(Module a, Module b)
        attributes(function type_func)
-#       attributes(Type t)
 
 # Connect(Var v, Var placeholder)
 ]]
