@@ -34,7 +34,6 @@ Module = mul
        attributes(function type_func)
 
 Connect = connect(Var v, Var placeholder)
-# Connect(Var v, Var placeholder)
 ]]
 
 -- In theory, we can do something like chain(map(*), reduce(+)) for a conv
