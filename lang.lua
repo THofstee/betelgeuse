@@ -231,6 +231,15 @@ print(inspect(st_wt_elem.type))
 local m = apply(map(map(mul())), st_wt_elem)
 print(inspect(m.type))
 
+local I = array2d(uint32(), 1920, 1080)
+local taps = array2d(uint32(), 3, 3)
+local st = apply(stencil(), { I = I, w = 3, h = 3 })
+local wt = apply(broadcast(), { type = taps, w = 1920, h = 1080 })
+local st_wt = apply(zip(), tuple(st, wt))
+local st_wt_elem = apply(map(zip()), st_wt)
+local m = apply(map(map(mul())), st_wt_elem)
+
+
 -- two ideas:
 -- 1. make the functions create an AST
 -- 2. make the functions return classes that can be chained into an AST
