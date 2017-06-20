@@ -33,6 +33,7 @@ Module = mul
        | chain(Module a, Module b)
        attributes(function type_func)
 
+Connect = connect(Var v, Var placeholder)
 # Connect(Var v, Var placeholder)
 ]]
 
