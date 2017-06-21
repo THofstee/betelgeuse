@@ -170,6 +170,10 @@ function L.input(t)
    return T.input(t, t)
 end
 
+function L.array(t, n)
+   return T.array(t, n)
+end
+
 function L.array2d(t, w, h)
    return T.array2d(t, w, h)
 end
@@ -200,6 +204,8 @@ local a = L.input(L.array2d(L.uint32(), 3, 3))
 local b = L.input(L.array2d(L.uint32(), 3, 3))
 local c = L.apply(L.zip(), L.concat(a, b))
 local d = L.apply(L.zip_rec(), L.concat(a, b))
+print(c.type)
+print(d.type)
 
 -- ([[uint32]], [[uint32]]) -> [[(uint32, uint32)]]
 -- (map (uncurry zip) ((uncurry zip) (a, b)))
@@ -207,6 +213,8 @@ local a = L.input(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5))
 local b = L.input(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5))
 local c = L.apply(L.map(L.zip()), L.apply(L.zip(), L.concat(a, b)))
 local d = L.apply(L.zip_rec(), L.concat(a, b))
+print(c.type)
+print(d.type)
 
 -- ([[[uint32]]], [[[uint32]]]) -> [[[(uint32, uint32)]]]
 -- (map (map (uncurry zip)) (map (uncurry zip) ((uncurry zip) (a, b))))
@@ -214,6 +222,8 @@ local a = L.input(L.array2d(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5), 7, 7))
 local b = L.input(L.array2d(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5), 7, 7))
 local c = L.apply(L.map(L.map(L.zip())), L.apply(L.map(L.zip()), L.apply(L.zip(), L.concat(a, b))))
 local d = L.apply(L.zip_rec(), L.concat(a, b))
+print(c.type)
+print(d.type)
 
 local I = L.input(L.array2d(L.uint32(), 1920, 1080))
 local taps = L.placeholder(L.array2d(L.uint32(), 3, 3))
