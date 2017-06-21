@@ -86,6 +86,29 @@ end
 function L.zip_rec()
    local function type_func(t)
 	  print('zip_rec type_func')
+
+	  local bt = {}
+	  local idx = 1
+	  local a = t.a
+	  local b = t.b
+	  while is_array_type(a) and is_array_type(b) do
+		 bt[idx] = a
+		 idx = idx + 1
+		 a = a.t
+		 b = b.t
+	  end
+
+	  local t = L.tuple(a, b)
+	  while idx > 1 do
+		 idx = idx - 1
+		 if bt[idx].kind == 'array' then
+			t = L.array(t, bt[idx].n)
+		 else
+			t = L.array2d(t, bt[idx].w, bt[idx].h)
+		 end
+	  end
+
+	  return t
    end
    
    return T.zip_rec(type_func)
@@ -161,7 +184,7 @@ function L.apply(m, v)
 	  return m, v
    end
 
-   m, v = expand_zip_rec(m, v)
+   -- m, v = expand_zip_rec(m, v)
    
    return T.apply(m, v, m.type_func(v.type))
 end
