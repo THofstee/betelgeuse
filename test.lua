@@ -37,6 +37,10 @@ Module = mul
 Connect = connect(Var v, Var placeholder)
 ]]
 
+local function is_array_type(t)
+   return t.kind == 'array' or t.kind == 'array2d'
+end
+
 -- In theory, we can do something like chain(map(*), reduce(+)) for a conv
 -- @todo: maybe add a zip_rec function that recursively zip until primitive types
 
@@ -63,7 +67,7 @@ function L.zip()
    local function type_func(t)
 	  print('zip type_func')
 	  assert(t.kind == 'tuple', 'zip requires input type to be tuple')
-	  assert(t.a.kind == 'array' or t.a.kind == 'array2d', 'zip operates over tuple of arrays')
+	  assert(is_array_type(t.a), 'zip operates over tuple of arrays')
 	  assert(t.a.kind == t.b.kind, 'cannot zip ' .. t.a.kind .. ' with ' .. t.b.kind)
 
 	  if t.a.kind == 'array' then
@@ -106,7 +110,7 @@ end
 function L.map(m)
    local function type_func(t)
 	  print('map type_func')
-	  assert(t.kind == 'array' or t.kind == 'array2d', 'map operates on arrays')
+	  assert(is_array_type(t), 'map operates on arrays')
 
 	  if t.kind == 'array' then
 		 return L.array(m.type_func(t.t), t.n)
@@ -130,7 +134,7 @@ end
 function L.reduce(m)
    local function type_func(t)
 	  print('reduce type_func')
-	  assert(t.kind == 'array' or t.kind == 'array2d', 'reduce operates on arrays')
+	  assert(is_array_type(t), 'reduce operates on arrays')
 	  return m.type_func(L.tuple(t.t, t.t))
    end
 
@@ -138,22 +142,27 @@ function L.reduce(m)
 end
 
 function L.apply(m, v)
-   if m.kind == 'zip_rec' then
-	  assert(v.type.kind == 'tuple')
+   local function expand_zip_rec(m, v)
+	  if m.kind == 'zip_rec' then
+		 assert(v.type.kind == 'tuple')
+		 
+		 m = L.zip()
+		 local a = v.type.a
+		 local b = v.type.b
+		 while is_array_type(a.t) and is_array_type(b.t) do
+			v = L.apply(m, v)
+			m = L.map(m)
 
-	  local function is_array_type(t)
-		 return t.kind == 'array' or t.kind == 'array2d'
+			a = a.t
+			b = b.t
+		 end
 	  end
-	  
-	  local a = v.type.a
-	  local b = v.type.b
-	  m = L.zip()
-	  while is_array_type(a.t) and is_array_type(b.t) do
-		 v = L.apply(m, v)
-		 m = L.map(m) 
-		 break
-	  end
+
+	  return m, v
    end
+
+   m, v = expand_zip_rec(m, v)
+   
    return T.apply(m, v, m.type_func(v.type))
 end
 
