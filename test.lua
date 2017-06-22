@@ -30,7 +30,7 @@ Module = mul
        | zip_rec
        | stencil(number w, number h)
        | broadcast(number w, number h) # @todo: what about 1d broadcast?
-#       | lift # @todo: dont know how to treat this yet
+#       | lift # @todo: this should raise rigel modules into this language
        | lambda(Var f, input x)
        attributes(function type_func)
 
