@@ -27,9 +27,9 @@ Module = mul
        | map(Module m)
        | reduce(Module m)
        | zip
-       | zip_rec
        | stencil(number w, number h)
        | broadcast(number w, number h) # @todo: what about 1d broadcast?
+# @todo consider changing multiply etc to use the lift feature and lift systolic
 #       | lift # @todo: this should raise rigel modules into this language
        | lambda(Var f, input x)
        attributes(function type_func)
@@ -84,34 +84,22 @@ function L.zip()
 end
 
 function L.zip_rec()
-   local function type_func(t)
-	  print('zip_rec type_func')
+   return function(v)
+	  assert(v.type.kind == 'tuple')
 
-	  local bt = {}
-	  local idx = 1
-	  local a = t.a
-	  local b = t.b
-	  while is_array_type(a) and is_array_type(b) do
-		 bt[idx] = a
-		 idx = idx + 1
+	  m = L.zip()
+	  local a = v.type.a
+	  local b = v.type.b
+	  while is_array_type(a.t) and is_array_type(b.t) do
+		 v = L.apply(m, v)
+		 m = L.map(m)
+		 
 		 a = a.t
 		 b = b.t
 	  end
-
-	  local t = L.tuple(a, b)
-	  while idx > 1 do
-		 idx = idx - 1
-		 if bt[idx].kind == 'array' then
-			t = L.array(t, bt[idx].n)
-		 else
-			t = L.array2d(t, bt[idx].w, bt[idx].h)
-		 end
-	  end
-
-	  return t
+	  
+	  return L.apply(m, v)
    end
-   
-   return T.zip_rec(type_func)
 end
 
 local function binop_type_func(t)
@@ -184,7 +172,7 @@ function L.apply(m, v)
 		 return m, v
 	  end
 	  
-	  m, v = expand_zip_rec(m, v)
+	  -- m, v = expand_zip_rec(m, v)
 	  
 	  return T.apply(m, v, m.type_func(v.type))
    end
