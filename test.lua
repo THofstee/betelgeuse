@@ -28,6 +28,7 @@ Module = mul
        | reduce(Module m)
        | zip
        | stencil(number w, number h)
+       | pad(number u, number d, number l, number r)
        | broadcast(number w, number h) # @todo: what about 1d broadcast?
 # @todo consider changing multiply etc to use the lift feature and lift systolic
 #       | lift # @todo: this should raise rigel modules into this language
@@ -61,6 +62,16 @@ function L.broadcast(w, h)
    end
 
    return T.broadcast(w, h, type_func)
+end
+
+function L.pad(u, d, l, r)
+   local function type_func(t)
+	  print('pad type_func')
+	  assert(t.kind == 'array2d', 'pad requires input type of array2d')
+	  return T.array2d(t.t, t.w+l+r, t.h+u+d)
+   end
+
+   return T.pad(u, d, l, r, type_func)
 end
 
 function L.zip()
@@ -252,20 +263,21 @@ local d = L.apply(L.zip_rec(), L.concat(a, b))
 assert(tostring(c.type) == tostring(d.type))
 
 -- convolution
-local I = L.input(L.array2d(L.uint32(), 1920, 1080))
+local im_size = { 1920, 1080 }
+local pad_size = { 1920+16, 1080+3 }
+local I = L.input(L.array2d(L.uint32(), im_size[1], im_size[2]))
+local pad = L.apply(L.pad(2, 1, 8, 8), I)
+local st = L.apply(L.stencil(4, 4), pad)
 local taps = L.const(L.array2d(L.uint32(), 4, 4),L.array2d_c({
 						   {  4, 14, 14,  4 },
 						   { 14, 32, 32, 14 },
 						   { 14, 32, 32, 14 },
 						   {  4, 14, 14,  4 }}))
-local st = L.apply(L.stencil(4, 4), I)
-local wt = L.apply(L.broadcast(1920, 1080), taps)
+local wt = L.apply(L.broadcast(pad_size[1], pad_size[2]), taps)
 local st_wt = L.apply(L.zip_rec(), L.concat(st, wt))
 local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
 local m = L.apply(conv, st_wt)
 print(m)
--- print(m.type)
--- print(inspect(m.type))
 
 local a = L.input(L.uint32())
 local b = L.input(L.uint32())
