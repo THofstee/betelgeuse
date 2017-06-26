@@ -298,44 +298,23 @@ local function translate_input(i)
    end
 end
 
-local input2 = translate_input(I)
+local input = translate_input(I)
 
-local input = R.input(R.array2d(R.array2d(R.uint8, 1, 1), im_size[1], im_size[2]))
+local input = R.input(R.array2d(R.uint8, im_size[1], im_size[2]))
 
 local function add_const()
-   local input = R.input(R.array2d(R.uint8, 1, 1))
+   local input = R.input(R.uint8)
 
-   local const = R.connect{
-	  input = nil,
-	  toModule = R.modules.constSeq{
-		 type = R.array(R.uint8, 1),
-		 P = 1,
-		 value = {const_val}
-	  }
+   local const = R.constant{
+	  type = R.uint8,
+	  value = const_val
    }
 
-   local merged = R.connect{
+   local sum = R.connect{
 	  input = R.concat{
 		 input,
 		 const
 	  },
-	  toModule = R.modules.SoAtoAoS{
-		 type = { R.uint8, R.uint8 },
-		 size = { 1, 1 }
-	  }
-   }
-
-   local unwrap = R.connect{
-	  input = merged,
-	  toModule = C.index(
-		 R.array2d(R.tuple{R.uint8, R.uint8}, 1, 1),
-		 0,
-		 0
-	  )
-   }
-
-   local sum = R.connect{
-	  input = unwrap,
 	  toModule = R.modules.sum{
 		 inType = R.uint8,
 		 outType = R.uint8
