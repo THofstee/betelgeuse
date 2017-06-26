@@ -5,13 +5,13 @@ local L = {}
 
 local T = asdl.NewContext()
 T:Define [[
-Type = uint32
+Type = uint(number n)
      | tuple(Type a, Type b)
      | array(Type t, number n)
      | array2d(Type t, number w, number h)
 
 # @todo: need to find a better way of dealing with these constants
-Val = uint32_c(number n)
+Val = uint_c(number n, number c)
     | array2d_c(table t)
 
 Var = input(Type t)
@@ -47,7 +47,6 @@ end
 
 function L.stencil(w, h)
    local function type_func(t)
-	  print('stencil type_func')
 	  assert(t.kind == 'array2d', 'stencil requires input type to be of array2d')
 	  return T.array2d(T.array2d(t.t, w, h), t.w, t.h)
    end
@@ -57,7 +56,6 @@ end
 
 function L.broadcast(w, h)
    local function type_func(t)
-	  print('broadcast type_func')
 	  return T.array2d(t, w, h)
    end
 
@@ -66,7 +64,6 @@ end
 
 function L.pad(u, d, l, r)
    local function type_func(t)
-	  print('pad type_func')
 	  assert(t.kind == 'array2d', 'pad requires input type of array2d')
 	  return T.array2d(t.t, t.w+l+r, t.h+u+d)
    end
@@ -76,7 +73,6 @@ end
 
 function L.zip()
    local function type_func(t)
-	  print('zip type_func')
 	  assert(t.kind == 'tuple', 'zip requires input type to be tuple')
 	  assert(is_array_type(t.a), 'zip operates over tuple of arrays')
 	  assert(t.a.kind == t.b.kind, 'cannot zip ' .. t.a.kind .. ' with ' .. t.b.kind)
@@ -98,7 +94,7 @@ function L.zip_rec()
    return function(v)
 	  assert(v.type.kind == 'tuple')
 
-	  m = L.zip()
+	  local m = L.zip()
 	  local a = v.type.a
 	  local b = v.type.b
 	  while is_array_type(a.t) and is_array_type(b.t) do
@@ -114,10 +110,9 @@ function L.zip_rec()
 end
 
 local function binop_type_func(t)
-   print('binop type_func')
    assert(t.kind == 'tuple', 'binop requires tuple input')
    assert(t.a.kind == t.b.kind, 'binop requires both elements in tuple to be of same type')
-   assert(t.a.kind == 'uint32', 'binop requires primitive type')
+   assert(t.a.kind == 'uint', 'binop requires primitive type')
    return t.a
 end   
 
@@ -131,7 +126,6 @@ end
 
 function L.map(m)
    local function type_func(t)
-	  print('map type_func')
 	  assert(is_array_type(t), 'map operates on arrays')
 
 	  if t.kind == 'array' then
@@ -152,7 +146,6 @@ end
 
 function L.reduce(m)
    local function type_func(t)
-	  print('reduce type_func')
 	  assert(is_array_type(t), 'reduce operates on arrays')
 	  return m.type_func(L.tuple(t.t, t.t))
    end
@@ -164,27 +157,6 @@ function L.apply(m, v)
    if type(m) == 'function' then
 	  return m(v)
    else
-	  local function expand_zip_rec(m, v)
-		 if m.kind == 'zip_rec' then
-			assert(v.type.kind == 'tuple')
-			
-			m = L.zip()
-			local a = v.type.a
-			local b = v.type.b
-			while is_array_type(a.t) and is_array_type(b.t) do
-			   v = L.apply(m, v)
-			   m = L.map(m)
-			   
-			   a = a.t
-			   b = b.t
-			end
-		 end
-		 
-		 return m, v
-	  end
-	  
-	  -- m, v = expand_zip_rec(m, v)
-	  
 	  return T.apply(m, v, m.type_func(v.type))
    end
 end
@@ -206,7 +178,11 @@ function L.tuple(a, b)
 end
 
 function L.uint32()
-   return T.uint32
+   return T.uint(32)
+end
+
+function L.uint8()
+   return T.uint(8)
 end
 
 function L.placeholder(t)
@@ -226,7 +202,7 @@ function L.const(t, v)
 end
 
 function L.lambda(f, x)
-   function type_func(t)
+   local function type_func(t)
 	  assert(tostring(x.type) == tostring(t))
 	  return f.type
    end
@@ -262,13 +238,143 @@ local c = L.apply(L.map(L.map(L.zip())), L.apply(L.map(L.zip()), L.apply(L.zip()
 local d = L.apply(L.zip_rec(), L.concat(a, b))
 assert(tostring(c.type) == tostring(d.type))
 
+-- testing lambda
+local x = L.input(L.uint32())
+local y = L.apply(L.add(), L.concat(x, L.const(L.uint32(), T.uint_c(32, 4))))
+local f = L.lambda(y, x)
+local z = L.apply(f, L.const(L.uint32(), T.uint_c(32, 1)))
+
+--[[
+   tests with rigel
+--]]
+package.path = "/home/hofstee/rigel/?.lua;/home/hofstee/rigel/src/?.lua;/home/hofstee/rigel/examples/?.lua;" .. package.path
+local R = require 'rigelSimple'
+local C = require 'examplescommon'
+
+-- add constant to image (broadcast)
+local im_size = { 1920, 1080 }
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local c = L.const(L.uint8(), T.uint_c(8, 1))
+local bc = L.apply(L.broadcast(im_size[1], im_size[2]), c)
+local m = L.apply(L.map(L.add()), L.apply(L.zip_rec(), L.concat(I, bc)))
+
+local input = R.input(R.array2d(R.uint8, im_size[1], im_size[2]))
+local const = R.modules.constSeq{
+   type = R.array(R.uint8, 1),
+   P = 1,
+   value = {1}
+}
+
+-- add constant to image (lambda)
+local im_size = { 32, 16 }
+local const_val = 30
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local x = L.input(L.uint8())
+local c = L.const(L.uint8(), T.uint_c(8, const_val))
+local add_c = L.lambda(L.apply(L.add(), L.concat(x, c)), x)
+local m = L.apply(L.map(add_c), I)
+
+local rtypes = require 'types'
+
+local function translate_type(t)
+   if T.Type:isclassof(t) then
+	  if T.array2d:isclassof(t) then
+		 return R.array2d(translate_type(t.t), t.w, t.h)
+	  elseif T.array:isclassof(t) then
+		 return R.array(translate_type(t.t), t.n)
+	  elseif T.uint:isclassof(t) then
+		 return rtypes.uint(t.n)
+	  end
+   else
+	  return t
+   end
+end
+
+local function translate_input(i)
+   if i.kind == 'input' then
+	  return R.input(translate_type(i.type))
+   else
+	  return i
+   end
+end
+
+local input2 = translate_input(I)
+
+local input = R.input(R.array2d(R.array2d(R.uint8, 1, 1), im_size[1], im_size[2]))
+
+local function add_const()
+   local input = R.input(R.array2d(R.uint8, 1, 1))
+
+   local const = R.connect{
+	  input = nil,
+	  toModule = R.modules.constSeq{
+		 type = R.array(R.uint8, 1),
+		 P = 1,
+		 value = {const_val}
+	  }
+   }
+
+   local merged = R.connect{
+	  input = R.concat{
+		 input,
+		 const
+	  },
+	  toModule = R.modules.SoAtoAoS{
+		 type = { R.uint8, R.uint8 },
+		 size = { 1, 1 }
+	  }
+   }
+
+   local unwrap = R.connect{
+	  input = merged,
+	  toModule = C.index(
+		 R.array2d(R.tuple{R.uint8, R.uint8}, 1, 1),
+		 0,
+		 0
+	  )
+   }
+
+   local sum = R.connect{
+	  input = unwrap,
+	  toModule = R.modules.sum{
+		 inType = R.uint8,
+		 outType = R.uint8
+	  }
+   }
+
+   return R.defineModule{ input = input, output = sum }
+end
+local mod = R.connect{
+   input = input,
+   toModule = R.modules.map{
+	  fn = add_const(),
+	  size = im_size
+   }
+}
+local mod_mod = R.HS(R.defineModule{
+   input = input,
+   output = mod,
+})
+
+R.harness{ fn = mod_mod,
+           inFile = "box_32_16.raw", inSize = im_size,
+           outFile = "test", outSize = im_size }
+-- print(inspect(mod))
+
+-- add two image streams
+local im_size = { 1920, 1080 }
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local J = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local ij = L.apply(L.zip_rec(), L.concat(I, J))
+local m = L.apply(L.map(L.add()), ij)
+
 -- convolution
 local im_size = { 1920, 1080 }
 local pad_size = { 1920+16, 1080+3 }
-local I = L.input(L.array2d(L.uint32(), im_size[1], im_size[2]))
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local pad = L.apply(L.pad(2, 1, 8, 8), I)
 local st = L.apply(L.stencil(4, 4), pad)
-local taps = L.const(L.array2d(L.uint32(), 4, 4),L.array2d_c({
+local taps = L.const(L.array2d(L.uint8(), 4, 4), L.array2d_c({
 						   {  4, 14, 14,  4 },
 						   { 14, 32, 32, 14 },
 						   { 14, 32, 32, 14 },
@@ -277,86 +383,158 @@ local wt = L.apply(L.broadcast(pad_size[1], pad_size[2]), taps)
 local st_wt = L.apply(L.zip_rec(), L.concat(st, wt))
 local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
 local m = L.apply(conv, st_wt)
-print(m)
 
-local a = L.input(L.uint32())
-local b = L.input(L.uint32())
-local ab = L.concat(a, b)
-local c = L.apply(L.add(), ab)
-local d = L.apply(L.mul(), ab)
-local cd = L.concat(c, d)
-local e = L.apply(L.add(), cd)
--- print(inspect(e, { depth = 3 }))
+-----
 
-local x = L.input(L.uint32())
-local y = L.apply(L.add(), L.concat(x, L.const(L.uint32(), T.uint32_c(4))))
-local f = L.lambda(y, x)
-local z = L.apply(f, L.const(L.uint32(), T.uint32_c(1)))
-print(z)
+-- local function f(a, b, c)
+--    if type(a) == 'table' then
+-- 	  local t = a
+-- 	  a = t.a
+-- 	  b = t.b
+-- 	  c = t.c
+--    end
+   
+--    print(a, b, c)
+-- end
 
-package.path = "/home/hofstee/rigel/?.lua;/home/hofstee/rigel/src/?.lua;/home/hofstee/rigel/examples/?.lua;" .. package.path
-local R = require 'rigelSimple'
+-- local function fff(...)
+--    local a, b, c = ...
+--    if type(...) == 'table' then
+-- 	  local t = ...
+-- 	  a = t.a
+-- 	  b = t.b
+-- 	  c = t.c
+--    end
+
+--    print(a, b, c)
+-- end
+
+-- f(1, 2, 3)
+-- f{ c = 3, b = 2, a = 1 }
+
+-- fff(1, 2, 3)
+-- fff{ c = 3, b = 2, a = 1 }
 
 P = 1/4
 inSize = { 1920, 1080 }
 padSize = { 1920+16, 1080+3 }
 
-function makePartialConvolve()
-  local convolveInput = R.input( R.array2d(R.uint8,4*P,4) )
-
-  local filterCoeff = R.connect{ input=nil, toModule =
-    R.modules.constSeq{ type=R.array2d(R.uint8,4,4), P=P, value = 
-      { 4, 14, 14,  4,
-        14, 32, 32, 14,
-        14, 32, 32, 14,
-        4, 14, 14,  4} } }
-                                   
-  local merged = R.connect{ input = R.concat{ convolveInput, filterCoeff }, 
-    toModule = R.modules.SoAtoAoS{ type={R.uint8,R.uint8}, size={4*P,4} } }
-  
-  local partials = R.connect{ input = merged, toModule =
-    R.modules.map{ fn = R.modules.mult{ inType = R.uint8, outType = R.uint32}, 
-                   size={4*P,4} } }
-  
-  local sum = R.connect{ input = partials, toModule =
-    R.modules.reduce{ fn = R.modules.sum{ inType = R.uint32, outType = R.uint32 }, 
-                      size={4*P,4} } }
-  
-  return R.defineModule{ input = convolveInput, output = sum }
+-- Flatten an n*m table into a 1*(n*m) table
+local function flatten_mat(m)
+   local idx = 0
+   local res = {}
+   
+   for h,row in ipairs(m) do
+	  for w,elem in ipairs(row) do
+		 idx = idx + 1
+		 res[idx] = elem
+	  end
+   end
+   
+   return res
 end
 
-----------------
-input = R.input( R.HS( R.array( R.uint8, 1) ) )
+-- local input = R.input(R.array2d(R.uint8, 1920, 1080))
+-- local padded = R.connect{
+--    input = input,
+--    toModule = R.modules.padSeq{
+-- 	  type = R.uint8,
+-- 	  V = 1,
+-- 	  size = inSize,
+-- 	  pad = { 8, 8, 2, 1 },
+-- 	  value = 0
+--    }
+-- }
+-- local st = R.connect{
+--    input = padded,
+--    toModule = C.stencil(
+-- 	  R.uint8,    -- A
+-- 	  padSize[1], -- w
+-- 	  padSize[2], -- h
+-- 	  -4,         -- xmin
+-- 	  0,          -- xmax
+-- 	  -4,         -- ymin
+-- 	  0           -- ymax
+--    )
+-- }
+-- local taps = R.modules.constSeq{
+--    type = R.array2d(R.uint8, 4, 4),
+--    P = P,
+--    value = flatten_mat({
+-- 		 {  4, 14, 14,  4 },
+-- 		 { 14, 32, 32, 14 },
+-- 		 { 14, 32, 32, 14 },
+-- 		 {  4, 14, 14,  4 }
+--    })
+-- }
+-- -- local wt = R.connect{
+-- --    input = taps,
+-- --    toModule = C.broadcast(
+-- -- 	  R.array2d(R.uint8, 4, 4), -- A
+-- -- 	  1920                      -- T
+-- --    )
+-- -- }
+-- local st_wt = something
+-- local conv = idk
+-- local m = thing
+-----
 
-padded = R.connect{ input=input, toModule = 
-  R.HS(R.modules.padSeq{ type = R.uint8, V=1, size=inSize, pad={8,8,2,1}, value=0})}
+-- function makePartialConvolve()
+--   local convolveInput = R.input( R.array2d(R.uint8,4*P,4) )
 
-stenciled = R.connect{ input=padded, toModule =
-  R.HS(R.modules.linebuffer{ type=R.uint8, V=1, size=padSize, stencil={-3,0,-3,0}})}
+--   local filterCoeff = R.connect{ input=nil, toModule =
+--     R.modules.constSeq{ type=R.array2d(R.uint8,4,4), P=P, value = 
+--       { 4, 14, 14,  4,
+--         14, 32, 32, 14,
+--         14, 32, 32, 14,
+--         4, 14, 14,  4} } }
+                                   
+--   local merged = R.connect{ input = R.concat{ convolveInput, filterCoeff }, 
+--     toModule = R.modules.SoAtoAoS{ type={R.uint8,R.uint8}, size={4*P,4} } }
+  
+--   local partials = R.connect{ input = merged, toModule =
+--     R.modules.map{ fn = R.modules.mult{ inType = R.uint8, outType = R.uint32}, 
+--                    size={4*P,4} } }
+  
+--   local sum = R.connect{ input = partials, toModule =
+--     R.modules.reduce{ fn = R.modules.sum{ inType = R.uint32, outType = R.uint32 }, 
+--                       size={4*P,4} } }
+  
+--   return R.defineModule{ input = convolveInput, output = sum }
+-- end
 
--- split stencil into columns
-partialStencil = R.connect{ input=stenciled, toModule=
-  R.HS(R.modules.devectorize{ type=R.uint8, H=4, V=1/P}) }
+-- ----------------
+-- input = R.input( R.HS( R.array( R.uint8, 1) ) )
 
--- perform partial convolution
-partialConvolved = R.connect{ input = partialStencil, toModule = 
-  R.HS(makePartialConvolve()) }
+-- padded = R.connect{ input=input, toModule = 
+--   R.HS(R.modules.padSeq{ type = R.uint8, V=1, size=inSize, pad={8,8,2,1}, value=0})}
 
--- sum partial convolutions to calculate full convolution
-summedPartials = R.connect{ input=partialConvolved, toModule =
-  R.HS(R.modules.reduceSeq{ fn = 
-    R.modules.sumAsync{ inType = R.uint32, outType = R.uint32 }, V=1/P}) }
+-- stenciled = R.connect{ input=padded, toModule =
+--   R.HS(R.modules.linebuffer{ type=R.uint8, V=1, size=padSize, stencil={-3,0,-3,0}})}
 
-convolved = R.connect{ input = summedPartials, toModule = 
-  R.HS(R.modules.shiftAndCast{ inType = R.uint32, outType = R.uint8, shift = 8 }) }
+-- -- split stencil into columns
+-- partialStencil = R.connect{ input=stenciled, toModule=
+--   R.HS(R.modules.devectorize{ type=R.uint8, H=4, V=1/P}) }
 
-output = R.connect{ input = convolved, toModule = 
-  R.HS(R.modules.cropSeq{ type = R.uint8, V=1, size=padSize, crop={9,7,3,0} }) }
+-- -- perform partial convolution
+-- partialConvolved = R.connect{ input = partialStencil, toModule = 
+--   R.HS(makePartialConvolve()) }
+
+-- -- sum partial convolutions to calculate full convolution
+-- summedPartials = R.connect{ input=partialConvolved, toModule =
+--   R.HS(R.modules.reduceSeq{ fn = 
+--     R.modules.sumAsync{ inType = R.uint32, outType = R.uint32 }, V=1/P}) }
+
+-- convolved = R.connect{ input = summedPartials, toModule = 
+--   R.HS(R.modules.shiftAndCast{ inType = R.uint32, outType = R.uint8, shift = 8 }) }
+
+-- output = R.connect{ input = convolved, toModule = 
+--   R.HS(R.modules.cropSeq{ type = R.uint8, V=1, size=padSize, crop={9,7,3,0} }) }
 
 
-convolveFunction = R.defineModule{ input = input, output = output }
-----------------
+-- convolveFunction = R.defineModule{ input = input, output = output }
+-- ----------------
 
-R.harness{ fn = convolveFunction,
-           inFile = "1080p.raw", inSize = inSize,
-           outFile = "convolve_slow", outSize = inSize }
+-- R.harness{ fn = convolveFunction,
+--            inFile = "1080p.raw", inSize = inSize,
+--            outFile = "convolve_slow", outSize = inSize }
