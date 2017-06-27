@@ -269,6 +269,8 @@ local m = L.apply(L.map(add_c), I)
 
 local rtypes = require 'types'
 
+local memoize = require 'memoize'
+
 local translate = {}
 local translate_m = {
    -- dispatch translation typechecking function thing
@@ -297,10 +299,12 @@ function translate.type(t)
 	  return rtypes.uint(t.n)
    end
 end
+translate.type = memoize(translate.type)
 
 function translate.input(i)
    return R.input(translate.type(i.type))
 end
+translate.input = memoize(translate.input)
 
 --[[
 Type = uint(number n)
@@ -343,25 +347,28 @@ function translate.var(v)
 	  return translate.const(v)
    end
 end
+translate.var = memoize(translate.var)
 
 function translate.const(c)
+   -- print(inspect(c, {depth = 2}))
    return R.constant{
 	  type = translate.type(c.type),
 	  value = c.v.c
    }
 end
+translate.const = memoize(translate.const)
 
 function translate.concat(c)
    return R.concat{ translate(c.a), translate(c.b) }
 end
+translate.concat = memoize(translate.concat)
 
 local r_I = translate.input(I)
 
 local function add_const()
    local r_x = translate(x)
    local r_c = translate(c)
-   local r_xc = R.concat{ r_x, r_c }
-   -- local r_xc = translate.concat(L.concat(x, c))
+   local r_xc = translate.concat(L.concat(x, c))
 
    local sum = R.connect{
 	  input = r_xc,
@@ -372,6 +379,7 @@ local function add_const()
    }
 
    return R.defineModule{ input = r_x, output = sum }
+   -- return R.defineModule{ input = r_xc.inputs[1], output = sum }
 end
 local mod = R.connect{
    input = r_I,
