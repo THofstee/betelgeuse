@@ -358,8 +358,8 @@ end
 local r_I = translate.input(I)
 
 local function add_const()
-   local r_x = translate.input(x)
-   local r_c = translate.const(c)
+   local r_x = translate(x)
+   local r_c = translate(c)
    local r_xc = R.concat{ r_x, r_c }
    -- local r_xc = translate.concat(L.concat(x, c))
 
