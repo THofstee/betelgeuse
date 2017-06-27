@@ -42,8 +42,13 @@ local function is_array_type(t)
    return t.kind == 'array' or t.kind == 'array2d'
 end
 
+local L_mt = {
+   __call = function(f, x)
+	  return L.apply(f, x)
+   end
+}
+
 -- In theory, we can do something like chain(map(*), reduce(+)) for a conv
--- @todo: maybe add a zip_rec function that recursively zip until primitive types
 
 function L.stencil(w, h)
    local function type_func(t)
@@ -53,6 +58,7 @@ function L.stencil(w, h)
    
    return T.stencil(w, h, type_func)
 end
+-- setmetatable(L.stencil, L_mt)
 
 function L.broadcast(w, h)
    local function type_func(t)
@@ -61,6 +67,7 @@ function L.broadcast(w, h)
 
    return T.broadcast(w, h, type_func)
 end
+-- setmetatable(L.broadcast, L_mt)
 
 function L.pad(u, d, l, r)
    local function type_func(t)
@@ -70,6 +77,7 @@ function L.pad(u, d, l, r)
 
    return T.pad(u, d, l, r, type_func)
 end
+-- setmetatable(L.pad, L_mt)
 
 function L.zip()
    local function type_func(t)
@@ -89,6 +97,7 @@ function L.zip()
 
    return T.zip(type_func)
 end
+-- setmetatable(L.zip, L_mt)
 
 function L.zip_rec()
    return function(v)
@@ -108,6 +117,7 @@ function L.zip_rec()
 	  return L.apply(m, v)
    end
 end
+-- setmetatable(L.zip_rec, L_mt)
 
 local function binop_type_func(t)
    assert(t.kind == 'tuple', 'binop requires tuple input')
@@ -119,10 +129,12 @@ end
 function L.mul()
    return T.mul(binop_type_func)
 end
+-- setmetatable(L.mul, L_mt)
 
 function L.add()
    return T.add(binop_type_func)
 end
+-- setmetatable(L.add, L_mt)
 
 function L.map(m)
    local function type_func(t)
@@ -137,12 +149,14 @@ function L.map(m)
 
    return T.map(m, type_func)
 end
+-- setmetatable(L.map, L_mt)
 
 function L.chain(a, b)
    return function(v)
 	  return L.apply(b, L.apply(a, v))
    end
 end
+-- setmetatable(L.chain, L_mt)
 
 function L.reduce(m)
    local function type_func(t)
@@ -152,6 +166,7 @@ function L.reduce(m)
 
    return T.reduce(m, type_func)
 end
+-- setmetatable(L.reduce, L_mt)
 
 function L.apply(m, v)
    if type(m) == 'function' then
@@ -209,6 +224,7 @@ function L.lambda(f, x)
 
    return T.lambda(f, x, type_func)
 end
+-- setmetatable(L.lambda, L_mt)
 
 --[[
    proving grounds
