@@ -1,4 +1,4 @@
--- local inspect = require 'inspect'
+local inspect = require 'inspect'
 local asdl = require 'asdl'
 
 local L = {}
@@ -278,16 +278,18 @@ local translate_m = {
 	  if m.kind == 'wrapped' then
 		 m = L_unwrap(m)
 	  end
+
+	  return translate[m.kind](m)
 	  
-	  if T.Type:isclassof(m) then
-		 return translate.type(m)
-	  elseif T.Value:isclassof(m) then
-		 return translate.value(m)
-	  elseif T.Module:isclassof(m) then
-		 return translate.module(m)
-	  elseif T.Connect:isclassof(m) then
-		 return translate.connect(m)
-	  end
+	  -- if T.Type:isclassof(m) then
+	  -- 	 return translate.type(m)
+	  -- elseif T.Value:isclassof(m) then
+	  -- 	 return translate.value(m)
+	  -- elseif T.Module:isclassof(m) then
+	  -- 	 return translate.module(m)
+	  -- elseif T.Connect:isclassof(m) then
+	  -- 	 return translate.connect(m)
+	  -- end
    end
 }
 setmetatable(translate, translate_m)
@@ -371,6 +373,7 @@ function translate.lambda(l)
 	  output = translate(l.f)
    }
 end
+translate.lambda = memoize(translate.lambda)
 
 function translate.map(m)
    local size
@@ -385,6 +388,7 @@ function translate.map(m)
 	  size = size
    }
 end
+translate.map = memoize(translate.map)
 
 -- add constant to image (broadcast)
 local im_size = { 1920, 1080 }
@@ -401,9 +405,93 @@ local x = L.input(L.uint8())
 local c = L.const(L.uint8(), const_val)
 local add_c = L.lambda(L.add()(L.concat(x, c)), x)
 local m_add = L.map(add_c)
-local m = L.lambda(m_add(I), I)
 
-R.harness{ fn = R.HS(translate(m)),
+-- could sort of metaprogram the thing like this, and postpone generation of the module until later
+-- you could create a different function that would take in something like a filename and then generate these properties in the function and pass it in to the module generation
+local function create_module(size)
+   local const_val = 30
+   local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+   local x = L.input(L.uint8())
+   local c = L.const(L.uint8(), const_val)
+   local add_c = L.lambda(L.add()(L.concat(x, c)), x)
+   local m_add = L.map(add_c)
+   return L.lambda(m_add(I), I)
+end
+local m = create_module(im_size)
+
+-- write_file('box_out.raw', m(read_file('box_32_16.raw')))
+
+local rigel_out = translate(m_add(I))
+
+-- partialStencil = R.connect{ input=stenciled, toModule=
+--   R.HS(R.modules.devectorize{ type=R.uint8, H=4, V=1/P}) }
+
+
+-- this function spits back the utilization of the module
+print(inspect(rigel_out:calcSdfRate(rigel_out)))
+
+-- vectorize -> module -> devectorize
+-- idea: change the module to a streaming interface by stamping out the module internally wxh times, then reduce internally until utilization is 100%
+
+-- converts a module to operate on streams instead of full images
+local function streamify(m)
+   local stream_in = R.input(R.HS(R.uint8))
+
+   local vec_in = R.connect{
+	  input = R.input(R.HS(R.uint8)),
+	  toModule = R.HS(
+		 R.modules.vectorize{
+			type = R.uint8,
+			H = 1,
+			V = im_size[1]*im_size[2]
+		 }
+	  )
+   }
+
+   local cast_in = R.connect{
+	  input = vec_in,
+	  toModule = R.HS(
+		 C.cast(
+			R.array2d(R.uint8, im_size[1]*im_size[2], 1),
+			R.array2d(R.uint8, im_size[1], im_size[2])
+		 )
+	  )
+   }
+
+   local vec_out = R.connect{
+	  input = cast_in,
+	  toModule = R.HS(m)
+   }
+
+   local cast_out = R.connect{
+	  input = vec_out,
+	  toModule = R.HS(
+		 C.cast(
+			R.array2d(R.uint8, im_size[1], im_size[2]),
+			R.array2d(R.uint8, im_size[1]*im_size[2], 1)
+		 )
+	  )
+   }
+
+   local stream_out = R.connect{
+	  input = cast_out,
+	  toModule = R.HS(
+		 R.modules.devectorize{
+			type = R.uint8,
+			H = 1,
+			V = im_size[1]*im_size[2],
+		 }
+	  )
+   }
+
+   return vec_out, stream_out
+end
+
+local dut, stream_out = streamify(translate(m))
+print(inspect(dut:calcSdfRate(stream_out)))
+
+local r_m = translate(m)
+R.harness{ fn = R.HS(r_m),
            inFile = "box_32_16.raw", inSize = im_size,
            outFile = "test", outSize = im_size }
 
