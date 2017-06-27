@@ -258,13 +258,6 @@ local c = L.const(L.uint8(), T.uint_c(8, 1))
 local bc = L.apply(L.broadcast(im_size[1], im_size[2]), c)
 local m = L.apply(L.map(L.add()), L.apply(L.zip_rec(), L.concat(I, bc)))
 
-local input = R.input(R.array2d(R.uint8, im_size[1], im_size[2]))
-local const = R.modules.constSeq{
-   type = R.array(R.uint8, 1),
-   P = 1,
-   value = {1}
-}
-
 -- add constant to image (lambda)
 local im_size = { 32, 16 }
 local const_val = 30
@@ -276,62 +269,119 @@ local m = L.apply(L.map(add_c), I)
 
 local rtypes = require 'types'
 
-local function translate_type(t)
-   if T.Type:isclassof(t) then
-	  if T.array2d:isclassof(t) then
-		 return R.array2d(translate_type(t.t), t.w, t.h)
-	  elseif T.array:isclassof(t) then
-		 return R.array(translate_type(t.t), t.n)
-	  elseif T.uint:isclassof(t) then
-		 return rtypes.uint(t.n)
+local translate = {}
+local translate_m = {
+   -- dispatch translation typechecking function thing
+   __call = function(t, m)
+	  if T.Type:isclassof(m) then
+		 return translate.type(m)
+	  elseif T.Val:isclassof(m) then
+		 return translate.val(m)
+	  elseif T.Var:isclassof(m) then
+		 return translate.var(m)
+	  elseif T.Module:isclassof(m) then
+		 return translate.module(m)
+	  elseif T.Connect:isclassof(m) then
+		 return translate.connect(m)
 	  end
-   else
-	  return t
+   end
+}
+setmetatable(translate, translate_m)
+
+function translate.type(t)
+   if T.array2d:isclassof(t) then
+	  return R.array2d(translate.type(t.t), t.w, t.h)
+   elseif T.array:isclassof(t) then
+	  return R.array(translate.type(t.t), t.n)
+   elseif T.uint:isclassof(t) then
+	  return rtypes.uint(t.n)
    end
 end
 
-local function translate_input(i)
-   if i.kind == 'input' then
-	  return R.input(translate_type(i.type))
-   else
-	  return i
+function translate.input(i)
+   return R.input(translate.type(i.type))
+end
+
+--[[
+Type = uint(number n)
+     | tuple(Type a, Type b)
+     | array(Type t, number n)
+     | array2d(Type t, number w, number h)
+
+# @todo: need to find a better way of dealing with these constants
+Val = uint_c(number n, number c)
+    | array2d_c(table t)
+
+Var = input(Type t)
+    | const(Type t, Val v)
+    | placeholder(Type t)
+    | concat(Var a, Var b)
+#    | split(Var v) # @todo: does this need to exist?
+    | apply(Module m, Var v)
+    attributes(Type type)
+
+Module = mul
+       | add
+       | map(Module m)
+       | reduce(Module m)
+       | zip
+       | stencil(number w, number h)
+       | pad(number u, number d, number l, number r)
+       | broadcast(number w, number h) # @todo: what about 1d broadcast?
+# @todo consider changing multiply etc to use the lift feature and lift systolic
+#       | lift # @todo: this should raise rigel modules into this language
+       | lambda(Var f, input x)
+       attributes(function type_func)
+
+Connect = connect(Var v, Var placeholder)
+--]]
+
+function translate.var(v)
+   if T.input:isclassof(v) then
+	  return translate.input(v)
+   elseif T.const:isclassof(v) then
+	  return translate.const(v)
    end
 end
 
-local input = translate_input(I)
+function translate.const(c)
+   return R.constant{
+	  type = translate.type(c.type),
+	  value = c.v.c
+   }
+end
 
-local input = R.input(R.array2d(R.uint8, im_size[1], im_size[2]))
+function translate.concat(c)
+   return R.concat{ translate(c.a), translate(c.b) }
+end
+
+local r_I = translate.input(I)
 
 local function add_const()
-   local input = R.input(R.uint8)
-
-   local const = R.constant{
-	  type = R.uint8,
-	  value = const_val
-   }
+   local r_x = translate.input(x)
+   local r_c = translate.const(c)
+   local r_xc = R.concat{ r_x, r_c }
+   -- local r_xc = translate.concat(L.concat(x, c))
 
    local sum = R.connect{
-	  input = R.concat{
-		 input,
-		 const
-	  },
+	  input = r_xc,
 	  toModule = R.modules.sum{
 		 inType = R.uint8,
 		 outType = R.uint8
 	  }
    }
 
-   return R.defineModule{ input = input, output = sum }
+   return R.defineModule{ input = r_x, output = sum }
 end
 local mod = R.connect{
-   input = input,
+   input = r_I,
    toModule = R.modules.map{
 	  fn = add_const(),
 	  size = im_size
    }
 }
 local mod_mod = R.HS(R.defineModule{
-   input = input,
+   input = r_I,
    output = mod,
 })
 
