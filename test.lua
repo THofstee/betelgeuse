@@ -250,25 +250,7 @@ local z = L.apply(f, L.const(L.uint32(), T.uint_c(32, 1)))
 package.path = "/home/hofstee/rigel/?.lua;/home/hofstee/rigel/src/?.lua;/home/hofstee/rigel/examples/?.lua;" .. package.path
 local R = require 'rigelSimple'
 local C = require 'examplescommon'
-
--- add constant to image (broadcast)
-local im_size = { 1920, 1080 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local c = L.const(L.uint8(), T.uint_c(8, 1))
-local bc = L.apply(L.broadcast(im_size[1], im_size[2]), c)
-local m = L.apply(L.map(L.add()), L.apply(L.zip_rec(), L.concat(I, bc)))
-
--- add constant to image (lambda)
-local im_size = { 32, 16 }
-local const_val = 30
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local x = L.input(L.uint8())
-local c = L.const(L.uint8(), T.uint_c(8, const_val))
-local add_c = L.lambda(L.apply(L.add(), L.concat(x, c)), x)
-local m = L.apply(L.map(add_c), I)
-
 local rtypes = require 'types'
-
 local memoize = require 'memoize'
 
 local translate = {}
@@ -347,6 +329,8 @@ function translate.var(v)
 	  return translate.const(v)
    elseif T.concat:isclassof(v) then
 	  return translate.concat(v)
+   elseif T.apply:isclassof(v) then
+	  return translate.apply(v)
    end
 end
 translate.var = memoize(translate.var)
@@ -376,6 +360,10 @@ translate.add = memoize(translate.add)
 function translate.module(m)
    if T.add:isclassof(m) then
 	  return translate.add(m)
+   elseif T.map:isclassof(m) then
+	  return translate.map(m)
+   elseif T.lambda:isclassof(m) then
+	  return translate.lambda(m)
    end
 end
 translate.module = memoize(translate.module)
@@ -388,34 +376,41 @@ function translate.apply(a)
 end
 translate.apply = memoize(translate.apply)
 
-local r_I = translate.input(I)
-
-local function add_const()
-   local r_x = translate(x)
-   local r_c = translate(c)
-   local r_xc = translate.concat(L.concat(x, c))
-
-   local sum = translate.apply(L.apply(L.add(), L.concat(x, c)))
-
-   return R.defineModule{ input = r_x, output = sum }
-   -- return R.defineModule{ input = r_xc.inputs[1], output = sum }
-end
-local mod = R.connect{
-   input = r_I,
-   toModule = R.modules.map{
-	  fn = add_const(),
-	  size = im_size
+function translate.lambda(l)
+   return R.defineModule{
+	  input = translate(l.x),
+	  output = translate(l.f)
    }
-}
-local mod_mod = R.HS(R.defineModule{
-   input = r_I,
-   output = mod,
-})
+end
 
-R.harness{ fn = mod_mod,
+function translate.map(m)
+   return R.modules.map{
+	  fn = translate(m.m),
+	  size = m.size
+   }
+end
+
+-- add constant to image (broadcast)
+local im_size = { 1920, 1080 }
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local c = L.const(L.uint8(), T.uint_c(8, 1))
+local bc = L.apply(L.broadcast(im_size[1], im_size[2]), c)
+local m = L.apply(L.map(L.add()), L.apply(L.zip_rec(), L.concat(I, bc)))
+
+-- add constant to image (lambda)
+local im_size = { 32, 16 }
+local const_val = 30
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local x = L.input(L.uint8())
+local c = L.const(L.uint8(), T.uint_c(8, const_val))
+local add_c = L.lambda(L.apply(L.add(), L.concat(x, c)), x)
+local m_add = L.map(add_c)
+m_add.size = im_size -- @todo: figure out a better way of getting size for maps
+local m = L.lambda(L.apply(m_add, I), I)
+
+R.harness{ fn = R.HS(translate(m)),
            inFile = "box_32_16.raw", inSize = im_size,
            outFile = "test", outSize = im_size }
--- print(inspect(mod))
 
 -- add two image streams
 local im_size = { 1920, 1080 }
