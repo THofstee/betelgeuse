@@ -1,4 +1,4 @@
-local inspect = require 'inspect'
+-- local inspect = require 'inspect'
 local asdl = require 'asdl'
 
 local L = {}
@@ -10,16 +10,12 @@ Type = uint(number n)
      | array(Type t, number n)
      | array2d(Type t, number w, number h)
 
-# @todo: need to find a better way of dealing with these constants
-Val = uint_c(number n, number c)
-    | array2d_c(table t)
-
-Var = input(Type t)
-    | const(Type t, Val v)
+Value = input(Type t)
+    | const(Type t, any v)
     | placeholder(Type t)
-    | concat(Var a, Var b)
-#    | split(Var v) # @todo: does this need to exist?
-    | apply(Module m, Var v)
+    | concat(Value a, Value b)
+#    | split(Value v) # @todo: does this need to exist?
+    | apply(Module m, Value v)
     attributes(Type type)
 
 Module = mul
@@ -32,10 +28,10 @@ Module = mul
        | broadcast(number w, number h) # @todo: what about 1d broadcast?
 # @todo consider changing multiply etc to use the lift feature and lift systolic
 #       | lift # @todo: this should raise rigel modules into this language
-       | lambda(Var f, input x)
+       | lambda(Value f, input x)
        attributes(function type_func)
 
-Connect = connect(Var v, Var placeholder)
+Connect = connect(Value v, Value placeholder)
 ]]
 
 local function is_array_type(t)
@@ -219,10 +215,6 @@ function L.concat(a, b)
    return T.concat(a, b, L.tuple(a.type, b.type))
 end
 
-function L.array2d_c(t)
-   return T.array2d_c(t)
-end
-
 function L.const(t, v)
    return T.const(t, v, t)
 end
@@ -266,9 +258,9 @@ assert(tostring(c.type) == tostring(d.type))
 
 -- testing lambda
 local x = L.input(L.uint32())
-local y = L.add()(L.concat(x, L.const(L.uint32(), T.uint_c(32, 4))))
+local y = L.add()(L.concat(x, L.const(L.uint32(), 4)))
 local f = L.lambda(y, x)
-local z = f(L.const(L.uint32(), T.uint_c(32, 1)))
+local z = f(L.const(L.uint32(), 1))
 
 --[[
    tests with rigel
@@ -289,10 +281,8 @@ local translate_m = {
 	  
 	  if T.Type:isclassof(m) then
 		 return translate.type(m)
-	  elseif T.Val:isclassof(m) then
-		 return translate.val(m)
-	  elseif T.Var:isclassof(m) then
-		 return translate.var(m)
+	  elseif T.Value:isclassof(m) then
+		 return translate.value(m)
 	  elseif T.Module:isclassof(m) then
 		 return translate.module(m)
 	  elseif T.Connect:isclassof(m) then
@@ -318,41 +308,7 @@ function translate.input(i)
 end
 translate.input = memoize(translate.input)
 
---[[
-Type = uint(number n)
-     | tuple(Type a, Type b)
-     | array(Type t, number n)
-     | array2d(Type t, number w, number h)
-
-# @todo: need to find a better way of dealing with these constants
-Val = uint_c(number n, number c)
-    | array2d_c(table t)
-
-Var = input(Type t)
-    | const(Type t, Val v)
-    | placeholder(Type t)
-    | concat(Var a, Var b)
-#    | split(Var v) # @todo: does this need to exist?
-    | apply(Module m, Var v)
-    attributes(Type type)
-
-Module = mul
-       | add
-       | map(Module m)
-       | reduce(Module m)
-       | zip
-       | stencil(number w, number h)
-       | pad(number u, number d, number l, number r)
-       | broadcast(number w, number h) # @todo: what about 1d broadcast?
-# @todo consider changing multiply etc to use the lift feature and lift systolic
-#       | lift # @todo: this should raise rigel modules into this language
-       | lambda(Var f, input x)
-       attributes(function type_func)
-
-Connect = connect(Var v, Var placeholder)
---]]
-
-function translate.var(v)
+function translate.value(v)
    if T.input:isclassof(v) then
 	  return translate.input(v)
    elseif T.const:isclassof(v) then
@@ -363,13 +319,12 @@ function translate.var(v)
 	  return translate.apply(v)
    end
 end
-translate.var = memoize(translate.var)
+translate.value = memoize(translate.value)
 
 function translate.const(c)
-   -- print(inspect(c, {depth = 2}))
    return R.constant{
 	  type = translate.type(c.type),
-	  value = c.v.c
+	  value = c.v
    }
 end
 translate.const = memoize(translate.const)
@@ -434,7 +389,7 @@ end
 -- add constant to image (broadcast)
 local im_size = { 1920, 1080 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local c = L.const(L.uint8(), T.uint_c(8, 1))
+local c = L.const(L.uint8(), 1)
 local bc = L.broadcast(im_size[1], im_size[2])(c)
 local m = L.map(L.add())(L.zip_rec()(L.concat(I, bc)))
 
@@ -443,7 +398,7 @@ local im_size = { 32, 16 }
 local const_val = 30
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local x = L.input(L.uint8())
-local c = L.const(L.uint8(), T.uint_c(8, const_val))
+local c = L.const(L.uint8(), const_val)
 local add_c = L.lambda(L.add()(L.concat(x, c)), x)
 local m_add = L.map(add_c)
 local m = L.lambda(m_add(I), I)
@@ -465,11 +420,11 @@ local pad_size = { 1920+16, 1080+3 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local pad = L.pad(2, 1, 8, 8)(I)
 local st = L.stencil(4, 4)(pad)
-local taps = L.const(L.array2d(L.uint8(), 4, 4), L.array2d_c({
+local taps = L.const(L.array2d(L.uint8(), 4, 4), {
 						   {  4, 14, 14,  4 },
 						   { 14, 32, 32, 14 },
 						   { 14, 32, 32, 14 },
-						   {  4, 14, 14,  4 }}))
+						   {  4, 14, 14,  4 }})
 local wt = L.broadcast(pad_size[1], pad_size[2])(taps)
 local st_wt = L.zip_rec()(L.concat(st, wt))
 local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
