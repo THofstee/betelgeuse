@@ -38,7 +38,6 @@ local function is_array_type(t)
    return t.kind == 'array' or t.kind == 'array2d'
 end
 
--- @todo: need to figure out how to actually implement syntax sugar. since the L.xxx are functions that return T.xxx, where the T.xxx have metatables i shouldn't touch, so i might need to wrap everything in a wrapper table...
 local L_mt = {
    __call = function(f, x)
 	  return L.apply(f, x)
