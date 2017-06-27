@@ -386,9 +386,13 @@ end
 translate.module = memoize(translate.module)
 
 function translate.apply(a)
+   -- propagate output type back to the module
+   local m = a.m
+   m.type = a.type
+   
    return R.connect{
 	  input = translate(a.v),
-	  toModule = translate(a.m)
+	  toModule = translate(m)
    }
 end
 translate.apply = memoize(translate.apply)
@@ -401,9 +405,16 @@ function translate.lambda(l)
 end
 
 function translate.map(m)
+   local size
+   if T.array:isclassof(m.type) then
+	  size = { m.type.n }
+   elseif T.array2d:isclassof(m.type) then
+	  size = { m.type.w, m.type.h }
+   end
+   
    return R.modules.map{
 	  fn = translate(m.m),
-	  size = m.size
+	  size = size
    }
 end
 
@@ -422,7 +433,6 @@ local x = L.input(L.uint8())
 local c = L.const(L.uint8(), T.uint_c(8, const_val))
 local add_c = L.lambda(L.apply(L.add(), L.concat(x, c)), x)
 local m_add = L.map(add_c)
-m_add.size = im_size -- @todo: figure out a better way of getting size for maps
 local m = L.lambda(L.apply(m_add, I), I)
 
 R.harness{ fn = R.HS(translate(m)),
