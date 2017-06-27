@@ -49,7 +49,16 @@ local L_mt = {
    end
 }
 
--- In theory, we can do something like chain(map(*), reduce(+)) for a conv
+-- @todo: maybe make this an element in the asdl rep?
+-- @todo: anything that returns a module should wrap it first
+local function L_wrap(m)
+   return setmetatable({ internal = m, kind = 'wrapped' }, L_mt)
+end
+
+-- @todo: anything that consumes a module should unwrap it first
+local function L_unwrap(w)
+   return w.internal
+end
 
 function L.stencil(w, h)
    local function type_func(t)
@@ -57,18 +66,16 @@ function L.stencil(w, h)
 	  return T.array2d(T.array2d(t.t, w, h), t.w, t.h)
    end
    
-   return T.stencil(w, h, type_func)
+   return L_wrap(T.stencil(w, h, type_func))
 end
--- setmetatable(L.stencil, L_mt)
 
 function L.broadcast(w, h)
    local function type_func(t)
 	  return T.array2d(t, w, h)
    end
 
-   return T.broadcast(w, h, type_func)
+   return L_wrap(T.broadcast(w, h, type_func))
 end
--- setmetatable(L.broadcast, L_mt)
 
 function L.pad(u, d, l, r)
    local function type_func(t)
@@ -76,9 +83,8 @@ function L.pad(u, d, l, r)
 	  return T.array2d(t.t, t.w+l+r, t.h+u+d)
    end
 
-   return T.pad(u, d, l, r, type_func)
+   return L_wrap(T.pad(u, d, l, r, type_func))
 end
--- setmetatable(L.pad, L_mt)
 
 function L.zip()
    local function type_func(t)
@@ -96,29 +102,29 @@ function L.zip()
 	  end
    end
 
-   return T.zip(type_func)
+   return L_wrap(T.zip(type_func))
 end
--- setmetatable(L.zip, L_mt)
 
 function L.zip_rec()
-   return function(v)
-	  assert(v.type.kind == 'tuple')
+   return L_wrap(
+	  function(v)
+		 assert(v.type.kind == 'tuple')
 
-	  local m = L.zip()
-	  local a = v.type.a
-	  local b = v.type.b
-	  while is_array_type(a.t) and is_array_type(b.t) do
-		 v = L.apply(m, v)
-		 m = L.map(m)
+		 local m = L.zip()
+		 local a = v.type.a
+		 local b = v.type.b
+		 while is_array_type(a.t) and is_array_type(b.t) do
+			v = L.apply(m, v)
+			m = L.map(m)
+			
+			a = a.t
+			b = b.t
+		 end
 		 
-		 a = a.t
-		 b = b.t
+		 return L.apply(m, v)
 	  end
-	  
-	  return L.apply(m, v)
-   end
+   )
 end
--- setmetatable(L.zip_rec, L_mt)
 
 local function binop_type_func(t)
    assert(t.kind == 'tuple', 'binop requires tuple input')
@@ -128,16 +134,16 @@ local function binop_type_func(t)
 end   
 
 function L.mul()
-   return T.mul(binop_type_func)
+   return L_wrap(T.mul(binop_type_func))
 end
--- setmetatable(L.mul, L_mt)
 
 function L.add()
-   return T.add(binop_type_func)
+   return L_wrap(T.add(binop_type_func))
 end
--- setmetatable(L.add, L_mt)
 
 function L.map(m)
+   local m = L_unwrap(m)
+   
    local function type_func(t)
 	  assert(is_array_type(t), 'map operates on arrays')
 
@@ -148,28 +154,32 @@ function L.map(m)
 	  end
    end
 
-   return T.map(m, type_func)
+   return L_wrap(T.map(m, type_func))
 end
--- setmetatable(L.map, L_mt)
 
 function L.chain(a, b)
-   return function(v)
-	  return L.apply(b, L.apply(a, v))
-   end
+   return L_wrap(
+	  function(v)
+		 return L.apply(b, L.apply(a, v))
+	  end
+   )
 end
 -- setmetatable(L.chain, L_mt)
 
 function L.reduce(m)
+   local m = L_unwrap(m)
+   
    local function type_func(t)
 	  assert(is_array_type(t), 'reduce operates on arrays')
 	  return m.type_func(L.tuple(t.t, t.t))
    end
 
-   return T.reduce(m, type_func)
+   return L_wrap(T.reduce(m, type_func))
 end
--- setmetatable(L.reduce, L_mt)
 
 function L.apply(m, v)
+   local m = L_unwrap(m)
+
    if type(m) == 'function' then
 	  return m(v)
    else
@@ -223,9 +233,8 @@ function L.lambda(f, x)
 	  return f.type
    end
 
-   return T.lambda(f, x, type_func)
+   return L_wrap(T.lambda(f, x, type_func))
 end
--- setmetatable(L.lambda, L_mt)
 
 --[[
    proving grounds
@@ -235,31 +244,31 @@ end
 -- ((uncurry zip) (a, b))
 local a = L.input(L.array2d(L.uint32(), 3, 3))
 local b = L.input(L.array2d(L.uint32(), 3, 3))
-local c = L.apply(L.zip(), L.concat(a, b))
-local d = L.apply(L.zip_rec(), L.concat(a, b))
+local c = L.zip()(L.concat(a, b))
+local d = L.zip_rec()(L.concat(a, b))
 assert(tostring(c.type) == tostring(d.type))
 
 -- ([[uint32]], [[uint32]]) -> [[(uint32, uint32)]]
 -- (map (uncurry zip) ((uncurry zip) (a, b)))
 local a = L.input(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5))
 local b = L.input(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5))
-local c = L.apply(L.map(L.zip()), L.apply(L.zip(), L.concat(a, b)))
-local d = L.apply(L.zip_rec(), L.concat(a, b))
+local c = L.map(L.zip())(L.zip()(L.concat(a, b)))
+local d = L.zip_rec()(L.concat(a, b))
 assert(tostring(c.type) == tostring(d.type))
 
 -- ([[[uint32]]], [[[uint32]]]) -> [[[(uint32, uint32)]]]
 -- (map (map (uncurry zip)) (map (uncurry zip) ((uncurry zip) (a, b))))
 local a = L.input(L.array2d(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5), 7, 7))
 local b = L.input(L.array2d(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5), 7, 7))
-local c = L.apply(L.map(L.map(L.zip())), L.apply(L.map(L.zip()), L.apply(L.zip(), L.concat(a, b))))
-local d = L.apply(L.zip_rec(), L.concat(a, b))
+local c = L.map(L.map(L.zip()))(L.map(L.zip())(L.zip()(L.concat(a, b))))
+local d = L.zip_rec()(L.concat(a, b))
 assert(tostring(c.type) == tostring(d.type))
 
 -- testing lambda
 local x = L.input(L.uint32())
-local y = L.apply(L.add(), L.concat(x, L.const(L.uint32(), T.uint_c(32, 4))))
+local y = L.add()(L.concat(x, L.const(L.uint32(), T.uint_c(32, 4))))
 local f = L.lambda(y, x)
-local z = L.apply(f, L.const(L.uint32(), T.uint_c(32, 1)))
+local z = f(L.const(L.uint32(), T.uint_c(32, 1)))
 
 --[[
    tests with rigel
@@ -274,6 +283,10 @@ local translate = {}
 local translate_m = {
    -- dispatch translation typechecking function thing
    __call = function(t, m)
+	  if m.kind == 'wrapped' then
+		 m = L_unwrap(m)
+	  end
+	  
 	  if T.Type:isclassof(m) then
 		 return translate.type(m)
 	  elseif T.Val:isclassof(m) then
@@ -422,8 +435,8 @@ end
 local im_size = { 1920, 1080 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local c = L.const(L.uint8(), T.uint_c(8, 1))
-local bc = L.apply(L.broadcast(im_size[1], im_size[2]), c)
-local m = L.apply(L.map(L.add()), L.apply(L.zip_rec(), L.concat(I, bc)))
+local bc = L.broadcast(im_size[1], im_size[2])(c)
+local m = L.map(L.add())(L.zip_rec()(L.concat(I, bc)))
 
 -- add constant to image (lambda)
 local im_size = { 32, 16 }
@@ -431,9 +444,9 @@ local const_val = 30
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local x = L.input(L.uint8())
 local c = L.const(L.uint8(), T.uint_c(8, const_val))
-local add_c = L.lambda(L.apply(L.add(), L.concat(x, c)), x)
+local add_c = L.lambda(L.add()(L.concat(x, c)), x)
 local m_add = L.map(add_c)
-local m = L.lambda(L.apply(m_add, I), I)
+local m = L.lambda(m_add(I), I)
 
 R.harness{ fn = R.HS(translate(m)),
            inFile = "box_32_16.raw", inSize = im_size,
@@ -443,24 +456,25 @@ R.harness{ fn = R.HS(translate(m)),
 local im_size = { 1920, 1080 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local J = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local ij = L.apply(L.zip_rec(), L.concat(I, J))
-local m = L.apply(L.map(L.add()), ij)
+local ij = L.zip_rec()(L.concat(I, J))
+local m = L.map(L.add())(ij)
 
 -- convolution
 local im_size = { 1920, 1080 }
 local pad_size = { 1920+16, 1080+3 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local pad = L.apply(L.pad(2, 1, 8, 8), I)
-local st = L.apply(L.stencil(4, 4), pad)
+local pad = L.pad(2, 1, 8, 8)(I)
+local st = L.stencil(4, 4)(pad)
 local taps = L.const(L.array2d(L.uint8(), 4, 4), L.array2d_c({
 						   {  4, 14, 14,  4 },
 						   { 14, 32, 32, 14 },
 						   { 14, 32, 32, 14 },
 						   {  4, 14, 14,  4 }}))
-local wt = L.apply(L.broadcast(pad_size[1], pad_size[2]), taps)
-local st_wt = L.apply(L.zip_rec(), L.concat(st, wt))
+local wt = L.broadcast(pad_size[1], pad_size[2])(taps)
+local st_wt = L.zip_rec()(L.concat(st, wt))
 local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
-local m = L.apply(conv, st_wt)
+local m = conv(st_wt)
+local m2 = L.map(L.reduce(L.add()))(L.map(L.map(L.mul()))(st_wt))
 
 -----
 
