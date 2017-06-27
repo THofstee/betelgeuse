@@ -345,6 +345,8 @@ function translate.var(v)
 	  return translate.input(v)
    elseif T.const:isclassof(v) then
 	  return translate.const(v)
+   elseif T.concat:isclassof(v) then
+	  return translate.concat(v)
    end
 end
 translate.var = memoize(translate.var)
@@ -363,6 +365,29 @@ function translate.concat(c)
 end
 translate.concat = memoize(translate.concat)
 
+function translate.add(m)
+   return R.modules.sum{
+	  inType = R.uint8,
+	  outType = R.uint8
+   }
+end
+translate.add = memoize(translate.add)
+
+function translate.module(m)
+   if T.add:isclassof(m) then
+	  return translate.add(m)
+   end
+end
+translate.module = memoize(translate.module)
+
+function translate.apply(a)
+   return R.connect{
+	  input = translate(a.v),
+	  toModule = translate(a.m)
+   }
+end
+translate.apply = memoize(translate.apply)
+
 local r_I = translate.input(I)
 
 local function add_const()
@@ -370,13 +395,7 @@ local function add_const()
    local r_c = translate(c)
    local r_xc = translate.concat(L.concat(x, c))
 
-   local sum = R.connect{
-	  input = r_xc,
-	  toModule = R.modules.sum{
-		 inType = R.uint8,
-		 outType = R.uint8
-	  }
-   }
+   local sum = translate.apply(L.apply(L.add(), L.concat(x, c)))
 
    return R.defineModule{ input = r_x, output = sum }
    -- return R.defineModule{ input = r_xc.inputs[1], output = sum }
