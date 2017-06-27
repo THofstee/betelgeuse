@@ -433,6 +433,7 @@ print(inspect(rigel_out:calcSdfRate(rigel_out)))
 -- vectorize -> module -> devectorize
 -- idea: change the module to a streaming interface by stamping out the module internally wxh times, then reduce internally until utilization is 100%
 
+-- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
 local function streamify(m)
    local stream_in = R.input(R.HS(R.uint8))
