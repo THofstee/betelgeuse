@@ -421,13 +421,7 @@ local m = create_module(im_size)
 -- write_file('box_out.raw', m(read_file('box_32_16.raw')))
 
 local rigel_out = translate(m_add(I))
-
--- partialStencil = R.connect{ input=stenciled, toModule=
---   R.HS(R.modules.devectorize{ type=R.uint8, H=4, V=1/P}) }
-
-
--- this function spits back the utilization of the module
-print(inspect(rigel_out:calcSdfRate(rigel_out)))
+print(inspect(rigel_out:calcSdfRate(rigel_out))) -- this function spits back the utilization of the module
 
 -- vectorize -> module -> devectorize
 -- idea: change the module to a streaming interface by stamping out the module internally wxh times, then reduce internally until utilization is 100%
@@ -435,15 +429,19 @@ print(inspect(rigel_out:calcSdfRate(rigel_out)))
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
 local function streamify(m)
-   local stream_in = R.input(R.HS(R.uint8))
+   local t = m.inputType.over
+   local w = m.inputType.size[1]
+   local h = m.inputType.size[2]
+   
+   local stream_in = R.input(R.HS(t))
 
    local vec_in = R.connect{
 	  input = R.input(R.HS(R.uint8)),
 	  toModule = R.HS(
 		 R.modules.vectorize{
-			type = R.uint8,
+			type = t,
 			H = 1,
-			V = im_size[1]*im_size[2]
+			V = w*h
 		 }
 	  )
    }
@@ -452,8 +450,8 @@ local function streamify(m)
 	  input = vec_in,
 	  toModule = R.HS(
 		 C.cast(
-			R.array2d(R.uint8, im_size[1]*im_size[2], 1),
-			R.array2d(R.uint8, im_size[1], im_size[2])
+			R.array2d(t, w*h, 1),
+			R.array2d(t, w, h)
 		 )
 	  )
    }
@@ -467,8 +465,8 @@ local function streamify(m)
 	  input = vec_out,
 	  toModule = R.HS(
 		 C.cast(
-			R.array2d(R.uint8, im_size[1], im_size[2]),
-			R.array2d(R.uint8, im_size[1]*im_size[2], 1)
+			R.array2d(t, w, h),
+			R.array2d(t, w*h, 1)
 		 )
 	  )
    }
@@ -477,9 +475,9 @@ local function streamify(m)
 	  input = cast_out,
 	  toModule = R.HS(
 		 R.modules.devectorize{
-			type = R.uint8,
+			type = t,
 			H = 1,
-			V = im_size[1]*im_size[2],
+			V = w*h,
 		 }
 	  )
    }
@@ -490,10 +488,17 @@ end
 local dut, stream_out = streamify(translate(m))
 print(inspect(dut:calcSdfRate(stream_out)))
 
+local function transform(m)
+   return m
+end
+
+local dut, stream_out = streamify(transform(translate(m)))
+print(inspect(dut:calcSdfRate(stream_out)))
+
 local r_m = translate(m)
-R.harness{ fn = R.HS(r_m),
-           inFile = "box_32_16.raw", inSize = im_size,
-           outFile = "test", outSize = im_size }
+-- R.harness{ fn = R.HS(r_m),
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test", outSize = im_size }
 
 -- add two image streams
 local im_size = { 1920, 1080 }
