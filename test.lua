@@ -514,10 +514,10 @@ local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local pad = L.pad(2, 1, 8, 8)(I)
 local st = L.stencil(4, 4)(pad)
 local taps = L.const(L.array2d(L.uint8(), 4, 4), {
-						   {  4, 14, 14,  4 },
-						   { 14, 32, 32, 14 },
-						   { 14, 32, 32, 14 },
-						   {  4, 14, 14,  4 }})
+						{  4, 14, 14,  4 },
+						{ 14, 32, 32, 14 },
+						{ 14, 32, 32, 14 },
+						{  4, 14, 14,  4 }})
 local wt = L.broadcast(pad_size[1], pad_size[2])(taps)
 local st_wt = L.zip_rec()(L.concat(st, wt))
 local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
@@ -533,7 +533,7 @@ local m2 = L.map(L.reduce(L.add()))(L.map(L.map(L.mul()))(st_wt))
 -- 	  b = t.b
 -- 	  c = t.c
 --    end
-   
+
 --    print(a, b, c)
 -- end
 
@@ -628,18 +628,18 @@ end
 --         14, 32, 32, 14,
 --         14, 32, 32, 14,
 --         4, 14, 14,  4} } }
-                                   
+
 --   local merged = R.connect{ input = R.concat{ convolveInput, filterCoeff }, 
 --     toModule = R.modules.SoAtoAoS{ type={R.uint8,R.uint8}, size={4*P,4} } }
-  
+
 --   local partials = R.connect{ input = merged, toModule =
 --     R.modules.map{ fn = R.modules.mult{ inType = R.uint8, outType = R.uint32}, 
 --                    size={4*P,4} } }
-  
+
 --   local sum = R.connect{ input = partials, toModule =
 --     R.modules.reduce{ fn = R.modules.sum{ inType = R.uint32, outType = R.uint32 }, 
 --                       size={4*P,4} } }
-  
+
 --   return R.defineModule{ input = convolveInput, output = sum }
 -- end
 
