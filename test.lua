@@ -11,12 +11,12 @@ Type = uint(number n)
      | array2d(Type t, number w, number h)
 
 Value = input(Type t)
-    | const(Type t, any v)
-    | placeholder(Type t)
-    | concat(Value a, Value b)
-#    | split(Value v) # @todo: does this need to exist?
-    | apply(Module m, Value v)
-    attributes(Type type)
+      | const(Type t, any v)
+      | placeholder(Type t)
+      | concat(Value a, Value b)
+#      | split(Value v) # @todo: does this need to exist?
+      | apply(Module m, Value v)
+      attributes(Type type)
 
 Module = mul
        | add
@@ -270,28 +270,17 @@ local C = require 'examplescommon'
 local rtypes = require 'types'
 local memoize = require 'memoize'
 
-local translate = {}
-local translate_m = {
-   -- dispatch translation typechecking function thing
+local dispatch_mt = {
    __call = function(t, m)
-	  if m.kind == 'wrapped' then
-		 m = L_unwrap(m)
-	  end
-
-	  return translate[m.kind](m)
-	  
-	  -- if T.Type:isclassof(m) then
-	  -- 	 return translate.type(m)
-	  -- elseif T.Value:isclassof(m) then
-	  -- 	 return translate.value(m)
-	  -- elseif T.Module:isclassof(m) then
-	  -- 	 return translate.module(m)
-	  -- elseif T.Connect:isclassof(m) then
-	  -- 	 return translate.connect(m)
-	  -- end
+	  return t[m.kind](m)
    end
 }
-setmetatable(translate, translate_m)
+local translate = {}
+setmetatable(translate, dispatch_mt)
+
+function translate.wrapped(w)
+   return translate(L_unwrap(w))
+end
 
 function translate.type(t)
    if T.array2d:isclassof(t) then
@@ -421,22 +410,20 @@ local m = create_module(im_size)
 -- write_file('box_out.raw', m(read_file('box_32_16.raw')))
 
 local rigel_out = translate(m_add(I))
-print(inspect(rigel_out:calcSdfRate(rigel_out))) -- this function spits back the utilization of the module
+-- print(inspect(rigel_out:calcSdfRate(rigel_out))) -- this function spits back the utilization of the module
 
 -- vectorize -> module -> devectorize
 -- idea: change the module to a streaming interface by stamping out the module internally wxh times, then reduce internally until utilization is 100%
 
--- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
--- converts a module to operate on streams instead of full images
-local function streamify(m)
-   local t = m.inputType.over
-   local w = m.inputType.size[1]
-   local h = m.inputType.size[2]
+-- wraps a rigel vectorize and cast
+local function vectorize(t, w, h)
+   if t:isNamed() and t.generator == 'Handshake' then
+	  t = t.params.A
+   end
+   local input = R.input(R.HS(t))
    
-   local stream_in = R.input(R.HS(t))
-
-   local vec_in = R.connect{
-	  input = R.input(R.HS(R.uint8)),
+   local vec = R.connect{
+	  input = input,
 	  toModule = R.HS(
 		 R.modules.vectorize{
 			type = t,
@@ -446,8 +433,8 @@ local function streamify(m)
 	  )
    }
 
-   local cast_in = R.connect{
-	  input = vec_in,
+   local output = R.connect{
+	  input = vec,
 	  toModule = R.HS(
 		 C.cast(
 			R.array2d(t, w*h, 1),
@@ -456,13 +443,21 @@ local function streamify(m)
 	  )
    }
 
-   local vec_out = R.connect{
-	  input = cast_in,
-	  toModule = R.HS(m)
+   return R.defineModule{
+	  input = input,
+	  output = output
    }
+end
 
-   local cast_out = R.connect{
-	  input = vec_out,
+-- wraps a rigel devectorize and cast
+local function devectorize(t, w, h)
+   if t:isNamed() and t.generator == 'Handshake' then
+	  t = t.params.A
+   end
+   local input = R.input(R.HS(R.array2d(t, w, h)))
+   
+   local cast = R.connect{
+	  input = input,
 	  toModule = R.HS(
 		 C.cast(
 			R.array2d(t, w, h),
@@ -471,8 +466,8 @@ local function streamify(m)
 	  )
    }
 
-   local stream_out = R.connect{
-	  input = cast_out,
+   local output = R.connect{
+	  input = cast,
 	  toModule = R.HS(
 		 R.modules.devectorize{
 			type = t,
@@ -482,18 +477,168 @@ local function streamify(m)
 	  )
    }
 
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+
+local function changeRate(t, util)
+   local arr_t = t.over
+   local w = t.size[1]
+   local h = t.size[2]
+
+   local input = R.input(R.HS(t))
+
+   local cast = R.connect{
+	  input = input,
+	  toModule = R.HS(
+		 C.cast(R.array2d(arr_t, w, h),
+				R.array2d(arr_t, w*h, 1)
+		 )
+	  )
+   }
+
+   local rate = R.connect{
+	  input = cast,
+	  toModule = R.HS(
+		 R.modules.changeRate{
+			type = arr_t,
+			H = 1,
+			inW = w*h,
+			outW = w*h * util[1]/util[2]
+		 }
+	  )
+   }
+
+   return R.defineModule{
+	  input = input,
+	  output = rate
+   }
+end
+
+-- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
+-- converts a module to operate on streams instead of full images
+local function streamify(m)
+   -- if the input is not an array the module is already streaming
+   if m.inputType.kind ~= 'array' then
+   	  return m
+   end
+
+   local t = m.inputType.over
+   local w = m.inputType.size[1]
+   local h = m.inputType.size[2]
+   
+   local stream_in = R.input(R.HS(t))
+
+   local vec_in = R.connect{
+	  input = stream_in,
+	  toModule = vectorize(t, w, h)
+   }
+
+   local vec_out = R.connect{
+	  input = vec_in,
+	  toModule = R.HS(m)
+   }
+
+   local stream_out = R.connect{
+	  input = vec_out,
+	  toModule = devectorize(t, w, h)
+   }
+
+   -- @todo: this should probably only return stream_out
+   -- @todo: need to figure out a better way of figuring out what to calcSdfRate on
    return vec_out, stream_out
 end
 
 local dut, stream_out = streamify(translate(m))
-print(inspect(dut:calcSdfRate(stream_out)))
+-- print(inspect(dut:calcSdfRate(stream_out)))
+
+local reduce_rate = {}
+setmetatable(reduce_rate, dispatch_mt)
 
 local function transform(m)
+   local RS = require 'rigelSimple'
+   local R = require 'rigel'
+   local output = m
+
+   local function get_utilization(m)
+	  return m:calcSdfRate(output)
+   end
+
+   local function get_name(m)
+	  if m.kind == 'lambda' then
+		 return get_name(m.output)
+	  elseif m.kind == 'map' then
+		 return m.kind
+	  elseif m.fn then
+		 return get_name(m.fn)
+	  else
+		 return m.kind
+	  end
+   end
+
+   m:visitEach(function(cur, inputs)
+		 -- print(inspect(cur.inputs, {depth = 2}))
+		 -- print(cur.kind)
+		 -- print(get_name(cur))
+		 local util = get_utilization(cur) or { 0, 0 }
+		 if util[2] > 1 then
+			if cur.kind == 'apply' then
+			   local t = inputs[1].type
+			   if t:isNamed() and t.generator == 'Handshake' then
+				  t = t.params.A
+			   end
+			   
+			   print('util:  ', util[1]..'/'..util[2])
+			   print('inType:', t)
+
+			   print(inspect(t))
+			   
+			   local welp = RS.connect{
+				  input = inputs[1],
+				  toModule = changeRate(t, util)
+			   }
+
+			   print(inspect(cur.fn), {depth = 3})
+			   -- local wat = RS.connect{
+			   -- 	  input = welp,
+			   -- 	  toModule = reduce_rate(cur.fn, util)
+			   -- }
+
+			   local help = RS.connect{
+				  input = welp,
+				  toModule = changeRate(welp.type.params.A, { util[2], util[1] })
+			   }
+			   
+			   return R.apply(
+				  cur.name,
+				  RS.HS(cur.fn),
+				  inputs[1]
+			   )
+			end
+		 end
+		 return cur
+   end)
+   -- print(inspect(m.fn.output.fn.fn.fn, {depth = 2}))
+   -- print(inspect(get_utilization(m.fn.output)))
    return m
 end
 
-local dut, stream_out = streamify(transform(translate(m)))
-print(inspect(dut:calcSdfRate(stream_out)))
+local x = L.input(L.uint8())
+local c = L.const(L.uint8(), const_val)
+local add_c = L.lambda(L.add()(L.concat(x, c)), x)
+local r2 = translate(add_c(x))
+local r3 = translate(add_c)
+local r4 = streamify(translate(add_c))
+-- print(inspect(r2:calcSdfRate(r2)))
+-- R.harness{ fn = R.HS(r3),
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test", outSize = im_size }
+
+local dut, stream_out = streamify(translate(m))
+local stream_out = transform(stream_out)
+-- print(inspect(dut:calcSdfRate(stream_out)))
 
 local r_m = translate(m)
 -- R.harness{ fn = R.HS(r_m),
@@ -526,35 +671,6 @@ local m2 = L.map(L.reduce(L.add()))(L.map(L.map(L.mul()))(st_wt))
 
 -----
 
--- local function f(a, b, c)
---    if type(a) == 'table' then
--- 	  local t = a
--- 	  a = t.a
--- 	  b = t.b
--- 	  c = t.c
---    end
-
---    print(a, b, c)
--- end
-
--- local function fff(...)
---    local a, b, c = ...
---    if type(...) == 'table' then
--- 	  local t = ...
--- 	  a = t.a
--- 	  b = t.b
--- 	  c = t.c
---    end
-
---    print(a, b, c)
--- end
-
--- f(1, 2, 3)
--- f{ c = 3, b = 2, a = 1 }
-
--- fff(1, 2, 3)
--- fff{ c = 3, b = 2, a = 1 }
-
 P = 1/4
 inSize = { 1920, 1080 }
 padSize = { 1920+16, 1080+3 }
@@ -573,108 +689,3 @@ local function flatten_mat(m)
    
    return res
 end
-
--- local input = R.input(R.array2d(R.uint8, 1920, 1080))
--- local padded = R.connect{
---    input = input,
---    toModule = R.modules.padSeq{
--- 	  type = R.uint8,
--- 	  V = 1,
--- 	  size = inSize,
--- 	  pad = { 8, 8, 2, 1 },
--- 	  value = 0
---    }
--- }
--- local st = R.connect{
---    input = padded,
---    toModule = C.stencil(
--- 	  R.uint8,    -- A
--- 	  padSize[1], -- w
--- 	  padSize[2], -- h
--- 	  -4,         -- xmin
--- 	  0,          -- xmax
--- 	  -4,         -- ymin
--- 	  0           -- ymax
---    )
--- }
--- local taps = R.modules.constSeq{
---    type = R.array2d(R.uint8, 4, 4),
---    P = P,
---    value = flatten_mat({
--- 		 {  4, 14, 14,  4 },
--- 		 { 14, 32, 32, 14 },
--- 		 { 14, 32, 32, 14 },
--- 		 {  4, 14, 14,  4 }
---    })
--- }
--- -- local wt = R.connect{
--- --    input = taps,
--- --    toModule = C.broadcast(
--- -- 	  R.array2d(R.uint8, 4, 4), -- A
--- -- 	  1920                      -- T
--- --    )
--- -- }
--- local st_wt = something
--- local conv = idk
--- local m = thing
------
-
--- function makePartialConvolve()
---   local convolveInput = R.input( R.array2d(R.uint8,4*P,4) )
-
---   local filterCoeff = R.connect{ input=nil, toModule =
---     R.modules.constSeq{ type=R.array2d(R.uint8,4,4), P=P, value = 
---       { 4, 14, 14,  4,
---         14, 32, 32, 14,
---         14, 32, 32, 14,
---         4, 14, 14,  4} } }
-
---   local merged = R.connect{ input = R.concat{ convolveInput, filterCoeff }, 
---     toModule = R.modules.SoAtoAoS{ type={R.uint8,R.uint8}, size={4*P,4} } }
-
---   local partials = R.connect{ input = merged, toModule =
---     R.modules.map{ fn = R.modules.mult{ inType = R.uint8, outType = R.uint32}, 
---                    size={4*P,4} } }
-
---   local sum = R.connect{ input = partials, toModule =
---     R.modules.reduce{ fn = R.modules.sum{ inType = R.uint32, outType = R.uint32 }, 
---                       size={4*P,4} } }
-
---   return R.defineModule{ input = convolveInput, output = sum }
--- end
-
--- ----------------
--- input = R.input( R.HS( R.array( R.uint8, 1) ) )
-
--- padded = R.connect{ input=input, toModule = 
---   R.HS(R.modules.padSeq{ type = R.uint8, V=1, size=inSize, pad={8,8,2,1}, value=0})}
-
--- stenciled = R.connect{ input=padded, toModule =
---   R.HS(R.modules.linebuffer{ type=R.uint8, V=1, size=padSize, stencil={-3,0,-3,0}})}
-
--- -- split stencil into columns
--- partialStencil = R.connect{ input=stenciled, toModule=
---   R.HS(R.modules.devectorize{ type=R.uint8, H=4, V=1/P}) }
-
--- -- perform partial convolution
--- partialConvolved = R.connect{ input = partialStencil, toModule = 
---   R.HS(makePartialConvolve()) }
-
--- -- sum partial convolutions to calculate full convolution
--- summedPartials = R.connect{ input=partialConvolved, toModule =
---   R.HS(R.modules.reduceSeq{ fn = 
---     R.modules.sumAsync{ inType = R.uint32, outType = R.uint32 }, V=1/P}) }
-
--- convolved = R.connect{ input = summedPartials, toModule = 
---   R.HS(R.modules.shiftAndCast{ inType = R.uint32, outType = R.uint8, shift = 8 }) }
-
--- output = R.connect{ input = convolved, toModule = 
---   R.HS(R.modules.cropSeq{ type = R.uint8, V=1, size=padSize, crop={9,7,3,0} }) }
-
-
--- convolveFunction = R.defineModule{ input = input, output = output }
--- ----------------
-
--- R.harness{ fn = convolveFunction,
---            inFile = "1080p.raw", inSize = inSize,
---            outFile = "convolve_slow", outSize = inSize }

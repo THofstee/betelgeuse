@@ -1,0 +1,8 @@
+devectorize := partition -> map_seq
+
+reduce(m*n) := devectorize(m) -> reduce_par(n) -> reduce_seq(m)
+reduce(m*n) := devectorize(m) -> reduce_par(n) -> vectorize(m) -> reduce_par(m)
+
+map(m*n) := devectorize(m) -> map_par(n) -> vectorize(m)
+
+downsample(n*m, m) := devectorize(n) -> downsample(m, 1) -> vectorize(n)
