@@ -1,8 +1,47 @@
-devectorize := partition -> map_seq
+map
+reduce -- tree reduce
+scan
+vectorize -- partition
+devectorize -- flatten
+upsample
+downsample
+stencil
+broadcast
+zip
+pad
+crop
 
-reduce(m*n) := devectorize(m) -> reduce_par(n) -> reduce_seq(m)
-reduce(m*n) := devectorize(m) -> reduce_par(n) -> vectorize(m) -> reduce_par(m)
+-- All operations assumed to be 1-dimensional
 
-map(m*n) := devectorize(m) -> map_par(n) -> vectorize(m)
+map    :: (a -> b) -> [a] -> [b]
+reduce :: (a -> a -> a) -> [a] -> a
+scan   :: (a -> a -> a) -> [a] -> [a]
+zip    :: [a] -> [b] -> [(a, b)]
+filter :: (a -> bool) -> [a] -> [a]
+
+vectorize   :: Int -> [a] -> [a]
+partition   :: Int -> [a] -> [[a]]
+devectorize :: Int -> [a] -> [a]   -- @todo: does this take an Int?
+flatten     :: Int -> [[a]] -> [a] -- @todo: does this take an Int?
+
+upsample   :: Int -> Int -> [a] -> [a]
+downsample :: Int -> Int -> [a] -> [a]
+
+-- @todo: should this be a -> [a] and then you map stencil instead?
+stencil   :: Int -> [a] -> [[a]] 
+broadcast :: Int -> a -> [a]
+
+pad  :: Int -> Int -> [a] -> [a]
+crop :: Int -> Int -> [a] -> [a]
+
+devectorize(m*n, m) := partition(m) -> map_seq(m)
+
+reduce_seq(m) := vectorize(m) -> reduce_par(m)
+
+reduce_par(m*n) := devectorize(m) -> reduce_par(n) -> reduce_seq(m)
+reduce_par(m*n) := devectorize(m) -> reduce_par(n) -> vectorize(m) -> reduce_par(m)
+
+map_par(m*n) := devectorize(m) -> map_par(n) -> vectorize(m)
+stencil(m*n) := devectorize(m) -> stencil(n) -> vectorize(m)
 
 downsample(n*m, m) := devectorize(n) -> downsample(m, 1) -> vectorize(n)

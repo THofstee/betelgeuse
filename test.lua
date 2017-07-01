@@ -1,19 +1,22 @@
 local inspect = require 'inspect'
 local asdl = require 'asdl'
+local List = asdl.List
 
 local L = {}
 
 local T = asdl.NewContext()
 T:Define [[
 Type = uint(number n)
-     | tuple(Type a, Type b)
+#     | tuple(Type a, Type b)
+     | tuple(Type* ts)
      | array(Type t, number n)
      | array2d(Type t, number w, number h)
 
 Value = input(Type t)
       | const(Type t, any v)
       | placeholder(Type t)
-      | concat(Value a, Value b)
+#      | concat(Value a, Value b)
+      | concat(Value* vs)
 #      | split(Value v) # @todo: does this need to exist?
       | apply(Module m, Value v)
       attributes(Type type)
@@ -84,16 +87,30 @@ end
 function L.zip()
    local function type_func(t)
 	  assert(t.kind == 'tuple', 'zip requires input type to be tuple')
-	  assert(is_array_type(t.a), 'zip operates over tuple of arrays')
-	  assert(t.a.kind == t.b.kind, 'cannot zip ' .. t.a.kind .. ' with ' .. t.b.kind)
+	  local arr_t = t.ts[1].kind
+	  for _,t in ipairs(t.ts) do
+		 assert(is_array_type(t), 'zip operates over tuple of arrays')
+		 assert(t.kind == arr_t, 'cannot zip ' .. arr_t .. ' with ' .. t.kind)
+	  end
 
-	  if t.a.kind == 'array' then
-		 local n = math.min(t.a.n, t.b.n)
-		 return L.array(L.tuple(t.a.t, t.b.t), n)
+	  if arr_t == 'array' then
+		 local n = t.ts[1].n
+		 local types = {}
+		 for i,t  in ipairs(t.ts) do
+			n = math.min(n, t.n)
+			types[i] = t.t
+		 end
+		 return L.array(L.tuple(types), n)
 	  else
-		 local w = math.min(t.a.w, t.b.w)
-		 local h = math.min(t.a.h, t.b.h)
-		 return L.array2d(L.tuple(t.a.t, t.b.t), w, h)
+		 local w = t.ts[1].w
+		 local h = t.ts[1].h
+		 local types = {}
+		 for i,t  in ipairs(t.ts) do
+			w = math.min(w, t.w)
+			h = math.min(h, t.h)
+			types[i] = t.t
+		 end
+		 return L.array2d(L.tuple(types), w, h)
 	  end
    end
 
@@ -106,26 +123,45 @@ function L.zip_rec()
 		 assert(v.type.kind == 'tuple')
 
 		 local m = L.zip()
-		 local a = v.type.a
-		 local b = v.type.b
-		 while is_array_type(a.t) and is_array_type(b.t) do
-			v = L.apply(m, v)
-			m = L.map(m)
-			
-			a = a.t
-			b = b.t
+		 local types = {}
+		 for i,t in ipairs(v.type.ts) do
+			types[i] = t
 		 end
 		 
-		 return L.apply(m, v)
+		 local function all_array_t()
+			if not is_array_type(types[1]) then
+			   return false
+			end
+			
+			local arr_t = types[1].kind			
+			for _,t in ipairs(types) do
+			   if not t.kind == arr_t then
+				  return false
+			   end
+			end
+			return true
+		 end
+
+		 while all_array_t() do
+			v = L.apply(m, v)
+			m = L.map(m)
+
+			for i,t in ipairs(types) do
+			   types[i] = t.t
+			end
+		 end
+		 
+		 return v --L.apply(m, v)
 	  end
    )
 end
 
 local function binop_type_func(t)
    assert(t.kind == 'tuple', 'binop requires tuple input')
-   assert(t.a.kind == t.b.kind, 'binop requires both elements in tuple to be of same type')
-   assert(t.a.kind == 'uint', 'binop requires primitive type')
-   return t.a
+   assert(#t.ts == 2, 'binop works on two elements')
+   assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
+   assert(t.ts[1].kind == 'uint', 'binop requires primitive type')
+   return t.ts[1]
 end   
 
 function L.mul()
@@ -178,6 +214,7 @@ function L.apply(m, v)
    if type(m) == 'function' then
 	  return m(v)
    else
+	  print(m)
 	  return T.apply(m, v, m.type_func(v.type))
    end
 end
@@ -194,9 +231,19 @@ function L.array2d(t, w, h)
    return T.array2d(t, w, h)
 end
 
-function L.tuple(a, b)
-   return T.tuple(a, b)
+function L.tuple(...)
+   if List:isclassof(...) then
+	  return T.tuple(...)
+   elseif #{...} == 1 then
+	  return T.tuple(List(...))
+   else
+	  return T.tuple(List{...})
+   end
 end
+
+-- function L.tuple(a, b)
+--    return T.tuple(a, b)
+-- end
 
 function L.uint32()
    return T.uint(32)
@@ -210,9 +257,18 @@ function L.placeholder(t)
    return T.placeholder(t, t)
 end
 
-function L.concat(a, b)
-   return T.concat(a, b, L.tuple(a.type, b.type))
+function L.concat(...)
+   local t = {}
+   for i,v in ipairs({...}) do
+	  t[i] = v.type
+   end
+   
+   return T.concat(List{...}, L.tuple(t))
 end
+
+-- function L.concat(a, b)
+--    return T.concat(a, b, L.tuple(a.type, b.type))
+-- end
 
 function L.const(t, v)
    return T.const(t, v, t)
@@ -320,7 +376,12 @@ end
 translate.const = memoize(translate.const)
 
 function translate.concat(c)
-   return R.concat{ translate(c.a), translate(c.b) }
+   local translated = {}
+   print(inspect(c))
+   for i,v in ipairs(c.vs) do
+	  translated[i] = translate(v)
+   end
+   return R.concat(translated)
 end
 translate.concat = memoize(translate.concat)
 
@@ -548,14 +609,31 @@ local function streamify(m)
 
    -- @todo: this should probably only return stream_out
    -- @todo: need to figure out a better way of figuring out what to calcSdfRate on
-   return vec_out, stream_out
+   -- @todo: this should also return a lambda
+   return R.defineModule{
+	  input = stream_in,
+	  output = stream_out
+   }
+   -- return vec_out, stream_out
 end
 
-local dut, stream_out = streamify(translate(m))
+-- local dut, stream_out = streamify(translate(m))
 -- print(inspect(dut:calcSdfRate(stream_out)))
 
 local reduce_rate = {}
 setmetatable(reduce_rate, dispatch_mt)
+
+local function get_name(m)
+   if m.kind == 'lambda' then
+	  return get_name(m.output)
+   elseif m.kind == 'map' then
+	  return m.kind
+   elseif m.fn then
+	  return get_name(m.fn)
+   else
+	  return m.kind
+   end
+end
 
 local function transform(m)
    local RS = require 'rigelSimple'
@@ -566,25 +644,10 @@ local function transform(m)
 	  return m:calcSdfRate(output)
    end
 
-   local function get_name(m)
-	  if m.kind == 'lambda' then
-		 return get_name(m.output)
-	  elseif m.kind == 'map' then
-		 return m.kind
-	  elseif m.fn then
-		 return get_name(m.fn)
-	  else
-		 return m.kind
-	  end
-   end
-
-   m:visitEach(function(cur, inputs)
-		 -- print(inspect(cur.inputs, {depth = 2}))
-		 -- print(cur.kind)
-		 -- print(get_name(cur))
+   return m:visitEach(function(cur, inputs)
 		 local util = get_utilization(cur) or { 0, 0 }
-		 if util[2] > 1 then
-			if cur.kind == 'apply' then
+		 if cur.kind == 'apply' then
+			if util[2] > 1 then
 			   local t = inputs[1].type
 			   if t:isNamed() and t.generator == 'Handshake' then
 				  t = t.params.A
@@ -593,36 +656,70 @@ local function transform(m)
 			   print('util:  ', util[1]..'/'..util[2])
 			   print('inType:', t)
 
-			   print(inspect(t))
+			   local function unwrap_handshake(m)
+				  if m.kind == 'makeHandshake' then
+					 return m.fn
+				  else
+					 return m
+				  end
+			   end
+
+			   local function reduce_rate(m, util)
+				  local input = RS.connect{
+					 input = RS.input(m.inputType),
+					 toModule = changeRate(t, util)
+				  }
+
+				  m = unwrap_handshake(m)
+				  m = m.output.fn
+
+				  -- local input = RS.connect{
+				  -- 	 input = RS.input(RS.HS(m.inputType)),
+				  -- 	 toModule = devectorize(m.inputType.over, m.W, m.H)
+				  -- }
+
+				  local w = m.W
+				  local h = m.H
+				  local max_reduce = m.W * m.H
+				  local parallelism = max_reduce * util[1]/util[2]
+				  print(parallelism)
+
+				  
+				  m = RS.modules.map{
+					 fn = m.fn,
+					 size = { parallelism }
+				  }
+
+				  local inter = RS.connect{
+					 input = input,
+					 toModule = RS.HS(m)
+				  }
+
+				  -- local output = RS.connect{
+				  -- 	 input = inter,
+				  -- 	 toModule = changeRate(inter.type.params.A, { util[2], util[1] })
+				  -- }
+
+				  local output = RS.connect{
+					 input = inter,
+					 toModule = vectorize(inter.type.params.A.over, w, h)
+				  }
+
+				  return output
+			   end
 			   
-			   local welp = RS.connect{
+			   return reduce_rate(cur.fn, util)
+			else
+			   return RS.connect{
 				  input = inputs[1],
-				  toModule = changeRate(t, util)
+				  toModule = cur.fn
 			   }
-
-			   print(inspect(cur.fn), {depth = 3})
-			   -- local wat = RS.connect{
-			   -- 	  input = welp,
-			   -- 	  toModule = reduce_rate(cur.fn, util)
-			   -- }
-
-			   local help = RS.connect{
-				  input = welp,
-				  toModule = changeRate(welp.type.params.A, { util[2], util[1] })
-			   }
-			   
-			   return R.apply(
-				  cur.name,
-				  RS.HS(cur.fn),
-				  inputs[1]
-			   )
 			end
 		 end
+		 
+		 -- @todo: this should also return a lambda
 		 return cur
    end)
-   -- print(inspect(m.fn.output.fn.fn.fn, {depth = 2}))
-   -- print(inspect(get_utilization(m.fn.output)))
-   return m
 end
 
 local x = L.input(L.uint8())
@@ -632,12 +729,34 @@ local r2 = translate(add_c(x))
 local r3 = translate(add_c)
 local r4 = streamify(translate(add_c))
 -- print(inspect(r2:calcSdfRate(r2)))
--- R.harness{ fn = R.HS(r3),
+-- R.harness{ fn = R.HS(translate(m)),
 --            inFile = "box_32_16.raw", inSize = im_size,
 --            outFile = "test", outSize = im_size }
 
-local dut, stream_out = streamify(translate(m))
-local stream_out = transform(stream_out)
+-- local dut, stream_out = streamify(translate(m))
+local stream_out = streamify(translate(m))
+
+-- R.harness{ fn = stream_out,
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test2", outSize = im_size }
+
+local stream_out = transform(stream_out.output)
+stream_out:visitEach(function(cur)
+	  print(get_name(cur))
+	  print(inspect(cur, {depth = 2}))
+	  print(inspect(cur:calcSdfRate(stream_out)))
+end)
+
+local input = stream_out.inputs[1].inputs[1].inputs[1].inputs[1].inputs[1]
+stream_out = R.defineModule{
+   input = input,
+   output = stream_out
+}
+
+-- R.harness{ fn = stream_out,
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test3", outSize = im_size }
+
 -- print(inspect(dut:calcSdfRate(stream_out)))
 
 local r_m = translate(m)
