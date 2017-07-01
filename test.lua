@@ -214,7 +214,6 @@ function L.apply(m, v)
    if type(m) == 'function' then
 	  return m(v)
    else
-	  print(m)
 	  return T.apply(m, v, m.type_func(v.type))
    end
 end
@@ -377,7 +376,6 @@ translate.const = memoize(translate.const)
 
 function translate.concat(c)
    local translated = {}
-   print(inspect(c))
    for i,v in ipairs(c.vs) do
 	  translated[i] = translate(v)
    end
