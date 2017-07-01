@@ -151,7 +151,7 @@ function L.zip_rec()
 			end
 		 end
 		 
-		 return v --L.apply(m, v)
+		 return v
 	  end
    )
 end
