@@ -543,11 +543,15 @@ local function devectorize(t, w, h)
 end
 
 local function changeRate(t, util)
+   print(inspect(t, {depth = 2}))
    local arr_t = t.over
    local w = t.size[1]
    local h = t.size[2]
 
-   local input = R.input(R.HS(t))
+   if t:isNamed() and t.generator == 'Handshake' then
+   	  t = t.params.A
+   end
+   local input = R.input(R.HS(R.array2d(arr_t, w, h)))
 
    local cast = R.connect{
 	  input = input,
@@ -623,11 +627,9 @@ setmetatable(reduce_rate, dispatch_mt)
 
 local function get_name(m)
    if m.kind == 'lambda' then
-	  return get_name(m.output)
-   elseif m.kind == 'map' then
-	  return m.kind
+	  return m.kind .. '(' .. get_name(m.output) .. ')'
    elseif m.fn then
-	  return get_name(m.fn)
+	  return m.kind .. '(' .. get_name(m.fn) .. ')'
    else
 	  return m.kind
    end
@@ -664,7 +666,7 @@ local function transform(m)
 
 			   local function reduce_rate(m, util)
 				  local input = RS.connect{
-					 input = RS.input(m.inputType),
+					 input = inputs[1],
 					 toModule = changeRate(t, util)
 				  }
 
@@ -733,6 +735,11 @@ local r4 = streamify(translate(add_c))
 
 -- local dut, stream_out = streamify(translate(m))
 local stream_out = streamify(translate(m))
+stream_out.output:visitEach(function(cur)
+	  print(get_name(cur))
+	  -- print(inspect(cur, {depth = 2}))
+	  print(inspect(cur:calcSdfRate(stream_out.output)))
+end)
 
 -- R.harness{ fn = stream_out,
 --            inFile = "box_32_16.raw", inSize = im_size,
@@ -741,11 +748,11 @@ local stream_out = streamify(translate(m))
 local stream_out = transform(stream_out.output)
 stream_out:visitEach(function(cur)
 	  print(get_name(cur))
-	  print(inspect(cur, {depth = 2}))
+	  -- print(inspect(cur, {depth = 2}))
 	  print(inspect(cur:calcSdfRate(stream_out)))
 end)
 
-local input = stream_out.inputs[1].inputs[1].inputs[1].inputs[1].inputs[1]
+local input = stream_out.inputs[1].inputs[1].inputs[1].inputs[1].inputs[1].inputs[1]
 stream_out = R.defineModule{
    input = input,
    output = stream_out
