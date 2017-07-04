@@ -1,251 +1,286 @@
-local inspect = require 'inspect'
+local asdl = require 'asdl'
+local List = asdl.List
 
--- @todo: fix type representation
+local L = {}
 
-local lang = {}
+local T = asdl.NewContext()
+T:Define [[
+Type = uint(number n)
+#     | tuple(Type a, Type b)
+     | tuple(Type* ts)
+     | array(Type t, number n)
+     | array2d(Type t, number w, number h)
 
-local function uint32()
-   return { type = 'uint32', kind = 'type' }
+Value = input(Type t)
+      | const(Type t, any v)
+      | placeholder(Type t)
+#      | concat(Value a, Value b)
+      | concat(Value* vs)
+#      | split(Value v) # @todo: does this need to exist?
+      | apply(Module m, Value v)
+      attributes(Type type)
+
+Module = mul
+       | add
+       | map(Module m)
+       | reduce(Module m)
+       | zip
+       | stencil(number w, number h)
+       | pad(number u, number d, number l, number r)
+       | broadcast(number w, number h) # @todo: what about 1d broadcast?
+# @todo consider changing multiply etc to use the lift feature and lift systolic
+#       | lift # @todo: this should raise rigel modules into this language
+       | lambda(Value f, input x)
+       attributes(function type_func)
+
+Connect = connect(Value v, Value placeholder)
+]]
+
+local function is_array_type(t)
+   return t.kind == 'array' or t.kind == 'array2d'
 end
-lang.uint32 = uint32
 
-local function array(t, n)
-   return { array = { n = n, type = t }, type = 'array', kind = 'type' }
+local L_mt = {
+   __call = function(f, x)
+	  return L.apply(f, x)
+   end
+}
+
+-- @todo: maybe make this an element in the asdl rep?
+-- @todo: anything that returns a module should wrap it first
+local function L_wrap(m)
+   return setmetatable({ internal = m, kind = 'wrapped' }, L_mt)
 end
-lang.array = array
 
-local function array2d(t, w, h)
-   return { array2d = { w = w, h = h, type = t }, type = 'array2d', kind = 'type' }
+-- @todo: anything that consumes a module should unwrap it first
+local function L_unwrap(w)
+   return w.internal
 end
-lang.array2d = array2d
 
-local function print_type(t)
-   local function print_helper(t)
-	  if t.kind == 'type' then
-		 if type(t.type) == 'table' then
-			print_helper(t.type)
-		 elseif t[t.type] ~= nil then
-			io.write(t.type .. '<')
-			print_helper(t[t.type].type)
-			io.write('>')
-		 else
-			io.write(t.type)
+function L.stencil(w, h)
+   local function type_func(t)
+	  assert(t.kind == 'array2d', 'stencil requires input type to be of array2d')
+	  return T.array2d(T.array2d(t.t, w, h), t.w, t.h)
+   end
+   
+   return L_wrap(T.stencil(w, h, type_func))
+end
+
+function L.broadcast(w, h)
+   local function type_func(t)
+	  return T.array2d(t, w, h)
+   end
+
+   return L_wrap(T.broadcast(w, h, type_func))
+end
+
+function L.pad(u, d, l, r)
+   local function type_func(t)
+	  assert(t.kind == 'array2d', 'pad requires input type of array2d')
+	  return T.array2d(t.t, t.w+l+r, t.h+u+d)
+   end
+
+   return L_wrap(T.pad(u, d, l, r, type_func))
+end
+
+function L.zip()
+   local function type_func(t)
+	  assert(t.kind == 'tuple', 'zip requires input type to be tuple')
+	  local arr_t = t.ts[1].kind
+	  for _,t in ipairs(t.ts) do
+		 assert(is_array_type(t), 'zip operates over tuple of arrays')
+		 assert(t.kind == arr_t, 'cannot zip ' .. arr_t .. ' with ' .. t.kind)
+	  end
+
+	  if arr_t == 'array' then
+		 local n = t.ts[1].n
+		 local types = {}
+		 for i,t  in ipairs(t.ts) do
+			n = math.min(n, t.n)
+			types[i] = t.t
 		 end
-	  elseif t.kind == 'func' then
-		 io.write(t.func .. ' :: ')
-		 print_helper(t.type_in)
-		 io.write(' -> ')
-		 print_helper(t.type_out)
+		 return L.array(L.tuple(types), n)
+	  else
+		 local w = t.ts[1].w
+		 local h = t.ts[1].h
+		 local types = {}
+		 for i,t  in ipairs(t.ts) do
+			w = math.min(w, t.w)
+			h = math.min(h, t.h)
+			types[i] = t.t
+		 end
+		 return L.array2d(L.tuple(types), w, h)
 	  end
    end
 
-   print_helper(t)
-   io.write('\n')
+   return L_wrap(T.zip(type_func))
 end
 
--- local function print_type(t)
---    local function print_helper(t)
--- 	  if type(t.type) == 'table' then
--- 		 print_helper(t.type)
--- 	  elseif t[t.type] ~= nil then
--- 		 io.write(t.type .. '<')
--- 		 print_helper(t[t.type].type)
--- 		 io.write('>')
--- 	  else
--- 		 io.write(t.type)
--- 	  end
---    end
+function L.zip_rec()
+   return L_wrap(
+	  function(v)
+		 assert(v.type.kind == 'tuple')
 
---    print_helper(t)
---    io.write('\n')
--- end
+		 local m = L.zip()
+		 local types = {}
+		 for i,t in ipairs(v.type.ts) do
+			types[i] = t
+		 end
+		 
+		 local function all_array_t()
+			if not is_array_type(types[1]) then
+			   return false
+			end
+			
+			local arr_t = types[1].kind			
+			for _,t in ipairs(types) do
+			   if not t.kind == arr_t then
+				  return false
+			   end
+			end
+			return true
+		 end
 
-local function broadcast()
-   local f = {}
+		 while all_array_t() do
+			v = L.apply(m, v)
+			m = L.map(m)
 
-   f.type = function(d)
-	  return array2d(d.type, d.w, d.h)
+			for i,t in ipairs(types) do
+			   types[i] = t.t
+			end
+		 end
+		 
+		 return v
+	  end
+   )
+end
+
+local function binop_type_func(t)
+   assert(t.kind == 'tuple', 'binop requires tuple input')
+   assert(#t.ts == 2, 'binop works on two elements')
+   assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
+   assert(t.ts[1].kind == 'uint', 'binop requires primitive type')
+   return t.ts[1]
+end   
+
+function L.mul()
+   return L_wrap(T.mul(binop_type_func))
+end
+
+function L.add()
+   return L_wrap(T.add(binop_type_func))
+end
+
+function L.map(m)
+   local m = L_unwrap(m)
+   
+   local function type_func(t)
+	  assert(is_array_type(t), 'map operates on arrays')
+
+	  if t.kind == 'array' then
+		 return L.array(m.type_func(t.t), t.n)
+	  else
+		 return L.array2d(m.type_func(t.t), t.w, t.h)
+	  end
+   end
+
+   return L_wrap(T.map(m, type_func))
+end
+
+function L.chain(a, b)
+   return L_wrap(
+	  function(v)
+		 return L.apply(b, L.apply(a, v))
+	  end
+   )
+end
+-- setmetatable(L.chain, L_mt)
+
+function L.reduce(m)
+   local m = L_unwrap(m)
+   
+   local function type_func(t)
+	  assert(is_array_type(t), 'reduce operates on arrays')
+	  return m.type_func(L.tuple(t.t, t.t))
+   end
+
+   return L_wrap(T.reduce(m, type_func))
+end
+
+function L.apply(m, v)
+   local m = L_unwrap(m)
+
+   if type(m) == 'function' then
+	  return m(v)
+   else
+	  return T.apply(m, v, m.type_func(v.type))
+   end
+end
+
+function L.input(t)
+   return T.input(t, t)
+end
+
+function L.array(t, n)
+   return T.array(t, n)
+end
+
+function L.array2d(t, w, h)
+   return T.array2d(t, w, h)
+end
+
+function L.tuple(...)
+   if List:isclassof(...) then
+	  return T.tuple(...)
+   elseif #{...} == 1 then
+	  return T.tuple(List(...))
+   else
+	  return T.tuple(List{...})
+   end
+end
+
+function L.uint32()
+   return T.uint(32)
+end
+
+function L.uint8()
+   return T.uint(8)
+end
+
+function L.placeholder(t)
+   return T.placeholder(t, t)
+end
+
+function L.concat(...)
+   local t = {}
+   for i,v in ipairs({...}) do
+	  t[i] = v.type
    end
    
-   f.func = 'broadcast'
-   f.kind = 'func'
-   return f
+   return T.concat(List{...}, L.tuple(t))
 end
 
-local function stencil()
-   local f = {}
+function L.const(t, v)
+   return T.const(t, v, t)
+end
 
-   f.type = function(d)
-	  return array2d(array2d(d.I.array2d.type, d.w, d.h), d.I.array2d.w, d.I.array2d.h)
+function L.lambda(f, x)
+   local function type_func(t)
+	  assert(tostring(x.type) == tostring(t))
+	  return f.type
    end
-   
-   f.func = 'stencil'
-   f.kind = 'func'
-   return f
+
+   return L_wrap(T.lambda(f, x, type_func))
 end
 
--- @todo: rerwite apply to use ... and arg?
-local function apply(f, d)
-   local I = {}
-   I.apply = { f = f, d = d }
-   I.type = f.type(d)
-   I.kind = 'apply'
-   return I
-end
-
--- @todo: overload metatable __type instead?
-local function typeof(t)
-   if t == nil then assert(false, "error: nil type ")
-   elseif t.array2d then return 'array2d'
-   elseif t.array   then return 'array'
-   elseif type(t.type) == 'table' then return typeof(t.type)
-   elseif t.tuple   then return 'tuple'
-   elseif t.kind == 'type' then return t.type
-   else assert(false, "unknown type: " .. inspect(t))
+function L.import()
+   for name, fun in pairs(L) do
+	  rawset(_G, name, fun)
    end
 end
 
-local function mul()
-   local f = {}
+L.raw = T
 
-   f.type = function(d)
-	  -- @todo make this just d instead of d.type
-	  assert(typeof(d.type) == 'tuple')
-	  assert(typeof(d.type.tuple.a) == typeof(d.type.tuple.b))
-	  return d.type.tuple.a
-   end
+L.unwrap = L_unwrap
 
-   f.func = 'mul'
-   f.kind = 'func'
-   return f
-end
-
-local function elem_type(t)
-   return t[typeof(t)].type
-end
-
--- [a] -> [b]
-local function map(f)
-   local I = {}
-   I.map = f
-   I.type = function(d)
-	  if typeof(d) == 'array2d' then
-		 -- @todo make it just elem_type(d.type) instead of the table
-		 return array2d(f.type({type = elem_type(d.type)}), d.type.array2d.w, d.type.array2d.h)
-	  else
-		 return array(f.type(d.array.type), d.array.n)
-	  end
-   end
-   I.kind = 'map'
-   return I
-end
-
-local function tuple(a, b)
-   return { tuple = { a = a, b = b }, kind = 'type' }
-end
-
--- ([a], [b]) -> [(a, b)]
-local function zip()
-   local I = {}
-
-   I.type = function(d)
-	  -- @todo make this just d instead of d.type
-	  if d.type then d = d.type end
-	  assert(typeof(d.tuple.a) == typeof(d.tuple.b)) -- both need to be same type of array, either both array2d or normal array, elem_type can differ
-
-	  -- @todo remove this jank hack
-	  local a = d.tuple.a
-	  if type(a.type) == 'table' then a = a.type end
-	  local b = d.tuple.b
-	  if type(b.type) == 'table' then b = b.type end
-	  
-	  if typeof(d.tuple.a) == 'array2d' then
-		 return array2d(tuple(elem_type(a), elem_type(b)), a.array2d.w, b.array2d.h)
-	  else
-		 return array(tuple(elem_type(a), elem_type(b)), a.array.n)
-	  end
-   end
-
-   I.kind = 'zip'
-   return I
-end
-
---[[
-   @todo implement high level language, something like:
---]]
-local m = function(I) -- I is an image
-   st = stencil(I, 3, 3) -- create a 3x3 stencil on the image type of I
-   taps = broadcast(weights, I.w, I.h) -- w and h known at runtime
-   mult = lift(function(x,y) return x*y end)
-   m = map(map(mult))(zip(st,taps)) -- map the multiply over all pixels
-   sum = map(reduce(sum))(m)
-   return sum
-end
-
---[[
-   proving grounds
---]]
-
--- local test_t = array2d(array2d(uint32(), 3, 3), 1920, 1080)
--- print(inspect(test_t))
--- print_type(test_t)
-
-local I = array2d(uint32(), 1920, 1080)
-
--- print(inspect(I))
--- print(inspect(stencil()))
--- print(inspect(apply(stencil(), {I = I, w = 3, h = 3})))
-
--- print_type(stencil())
--- print_type(apply(stencil(), {I = I, w = 3, h = 3}))
-
--- outdated
--- print(inspect(map(mul(), I)))
-
--- outdated
--- print(inspect(apply(map(mul()), I)))
-
--- print(inspect(I))
--- print(inspect(apply(stencil(), { I = I, w = 3, h = 3 })))
--- print(inspect(apply(map(map(mul())), apply(stencil(), { I = I, w = 3, h = 3 }))))
-
--- local test = map(map(mul()))
--- setmetatable(test, { __call = function(t, args) return apply(t, args) end })
--- print(inspect(test(apply(stencil(), { I = I, w = 3, h = 3 }))))
-
--- trying to do the equivalent of this in Haskell:
---   (map (map (uncurry (*)))) $ (map (uncurry zip) (zip st wt))
--- it would be nice to replace that last bit with just map zip (st wt) since the map is 2d-array aware right now?
--- but then this is strange since it means map is being applied to a tuple of arrays...
--- probably should leave semantics intact at least for now and require the double zip?
-local I = array2d(uint32(), 1920, 1080) -- declare in image 1920x1080, type = uint32[1920x1080]
-local taps = array2d(uint32(), 3, 3)    -- create 3x3 taps, type = uint32[3x3]
-local st = apply(stencil(), { I = I, w = 3, h = 3 }) -- apply a stencil on the image, type = uint32[3x3][1920x1080]
-local wt = apply(broadcast(), { type = taps, w = 1920, h = 1080 }) -- broadcast the taps to 1920x1080, type = uint32[3x3][1920x1080]
--- print(inspect(st.type))
--- print(inspect(wt.type))
-local st_wt = apply(zip(), tuple(st, wt)) -- type = {uint32[3x3], uint32[3x3]}[1920x1080]
--- print(inspect(st_wt.type))
-local st_wt_elem = apply(map(zip()), st_wt) -- type = {uint32, uint32}[3x3][1920x1080]
-print(inspect(st_wt_elem.type))
-local m = apply(map(map(mul())), st_wt_elem)
-print(inspect(m.type))
-
-local I = array2d(uint32(), 1920, 1080)
-local taps = array2d(uint32(), 3, 3)
-local st = apply(stencil(), { I = I, w = 3, h = 3 })
-local wt = apply(broadcast(), { type = taps, w = 1920, h = 1080 })
-local st_wt = apply(zip(), tuple(st, wt))
-local st_wt_elem = apply(map(zip()), st_wt)
-local m = apply(map(map(mul())), st_wt_elem)
-
-
--- two ideas:
--- 1. make the functions create an AST
--- 2. make the functions return classes that can be chained into an AST
-
--- alternative ideas:
--- 1. same as above but creates a graph.
--- 2. the function calls instantiate modules as we go
-
-return lang
+return L
