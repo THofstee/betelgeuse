@@ -13,7 +13,7 @@ Type = uint(number n)
 Value = input(Type t)
       | const(Type t, any v)
       | placeholder(Type t)
-      | concat(Value* vs)
+      | concat(Value* vs) # @todo: it might be nice if i can index this with [n]
 #      | split(Value v) # @todo: does this need to exist?
       | apply(Module m, Value v)
       attributes(Type type)
