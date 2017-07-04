@@ -543,7 +543,6 @@ local function devectorize(t, w, h)
 end
 
 local function changeRate(t, util)
-   print(inspect(t, {depth = 2}))
    local arr_t = t.over
    local w = t.size[1]
    local h = t.size[2]
@@ -630,6 +629,8 @@ local function get_name(m)
 	  return m.kind .. '(' .. get_name(m.output) .. ')'
    elseif m.fn then
 	  return m.kind .. '(' .. get_name(m.fn) .. ')'
+   elseif m.kind == 'input' then
+	  return m.kind .. '(' .. tostring(m.type) .. ')'
    else
 	  return m.kind
    end
@@ -653,9 +654,6 @@ local function transform(m)
 				  t = t.params.A
 			   end
 			   
-			   print('util:  ', util[1]..'/'..util[2])
-			   print('inType:', t)
-
 			   local function unwrap_handshake(m)
 				  if m.kind == 'makeHandshake' then
 					 return m.fn
@@ -674,7 +672,7 @@ local function transform(m)
 				  m = m.output.fn
 
 				  -- local input = RS.connect{
-				  -- 	 input = RS.input(RS.HS(m.inputType)),
+				  -- 	 input = inptus[1],
 				  -- 	 toModule = devectorize(m.inputType.over, m.W, m.H)
 				  -- }
 
@@ -682,8 +680,6 @@ local function transform(m)
 				  local h = m.H
 				  local max_reduce = m.W * m.H
 				  local parallelism = max_reduce * util[1]/util[2]
-				  print(parallelism)
-
 				  
 				  m = RS.modules.map{
 					 fn = m.fn,
@@ -722,6 +718,16 @@ local function transform(m)
    end)
 end
 
+-- @todo: implement flattening for rigel modules so we can inspect the changeRate sequences
+local function flatten(m)
+   
+end
+
+-- @todo: add a function to import library into the global namespace
+-- @todo: add something like betel(function(I) map(f)(I) end) that will let you declare lambdas more easily
+-- @todo: add something like an extra class that when called will lower the module into rigel and give you back something
+-- @todo: remove the rigel harness calls, or make a nicer way to do that
+
 local x = L.input(L.uint8())
 local c = L.const(L.uint8(), const_val)
 local add_c = L.lambda(L.add()(L.concat(x, c)), x)
@@ -737,7 +743,6 @@ local r4 = streamify(translate(add_c))
 local stream_out = streamify(translate(m))
 stream_out.output:visitEach(function(cur)
 	  print(get_name(cur))
-	  -- print(inspect(cur, {depth = 2}))
 	  print(inspect(cur:calcSdfRate(stream_out.output)))
 end)
 
@@ -748,7 +753,6 @@ end)
 local stream_out = transform(stream_out.output)
 stream_out:visitEach(function(cur)
 	  print(get_name(cur))
-	  -- print(inspect(cur, {depth = 2}))
 	  print(inspect(cur:calcSdfRate(stream_out)))
 end)
 
@@ -813,3 +817,11 @@ local function flatten_mat(m)
    
    return res
 end
+
+function L.import()
+   for name, fun in pairs(L) do
+	  rawset(_G, name, fun)
+   end
+end
+
+return L
