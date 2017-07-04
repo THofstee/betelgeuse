@@ -339,7 +339,7 @@ end
 
 function translate.type(t)
    if T.array2d:isclassof(t) then
-	  return R.array2d(translate.type(t.t), t.w, t.h)
+	  return R.array2d(translate.type(t.t), t.w*t.h, 1)
    elseif T.array:isclassof(t) then
 	  return R.array(translate.type(t.t), t.n)
    elseif T.uint:isclassof(t) then
@@ -427,7 +427,7 @@ function translate.map(m)
    if T.array:isclassof(m.type) then
 	  size = { m.type.n }
    elseif T.array2d:isclassof(m.type) then
-	  size = { m.type.w, m.type.h }
+	  size = { m.type.w*m.type.h, 1 }
    end
    
    return R.modules.map{
@@ -492,19 +492,9 @@ local function vectorize(t, w, h)
 	  )
    }
 
-   local output = R.connect{
-	  input = vec,
-	  toModule = R.HS(
-		 C.cast(
-			R.array2d(t, w*h, 1),
-			R.array2d(t, w, h)
-		 )
-	  )
-   }
-
    return R.defineModule{
 	  input = input,
-	  output = output
+	  output = vec
    }
 end
 
@@ -514,19 +504,9 @@ local function devectorize(t, w, h)
 	  t = t.params.A
    end
    local input = R.input(R.HS(R.array2d(t, w, h)))
-   
-   local cast = R.connect{
-	  input = input,
-	  toModule = R.HS(
-		 C.cast(
-			R.array2d(t, w, h),
-			R.array2d(t, w*h, 1)
-		 )
-	  )
-   }
 
    local output = R.connect{
-	  input = cast,
+	  input = input,
 	  toModule = R.HS(
 		 R.modules.devectorize{
 			type = t,
@@ -552,17 +532,8 @@ local function changeRate(t, util)
    end
    local input = R.input(R.HS(R.array2d(arr_t, w, h)))
 
-   local cast = R.connect{
-	  input = input,
-	  toModule = R.HS(
-		 C.cast(R.array2d(arr_t, w, h),
-				R.array2d(arr_t, w*h, 1)
-		 )
-	  )
-   }
-
    local rate = R.connect{
-	  input = cast,
+	  input = input,
 	  toModule = R.HS(
 		 R.modules.changeRate{
 			type = arr_t,
