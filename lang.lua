@@ -6,7 +6,6 @@ local L = {}
 local T = asdl.NewContext()
 T:Define [[
 Type = uint(number n)
-#     | tuple(Type a, Type b)
      | tuple(Type* ts)
      | array(Type t, number n)
      | array2d(Type t, number w, number h)
@@ -14,7 +13,6 @@ Type = uint(number n)
 Value = input(Type t)
       | const(Type t, any v)
       | placeholder(Type t)
-#      | concat(Value a, Value b)
       | concat(Value* vs)
 #      | split(Value v) # @todo: does this need to exist?
       | apply(Module m, Value v)
@@ -28,12 +26,12 @@ Module = mul
        | stencil(number w, number h)
        | pad(number u, number d, number l, number r)
        | broadcast(number w, number h) # @todo: what about 1d broadcast?
-# @todo consider changing multiply etc to use the lift feature and lift systolic
+# @todo: consider changing multiply etc to use the lift feature and lift systolic
 #       | lift # @todo: this should raise rigel modules into this language
        | lambda(Value f, input x)
        attributes(function type_func)
 
-Connect = connect(Value v, Value placeholder)
+# Connect = connect(Value v, Value placeholder)
 ]]
 
 local function is_array_type(t)
@@ -194,7 +192,6 @@ function L.chain(a, b)
 	  end
    )
 end
--- setmetatable(L.chain, L_mt)
 
 function L.reduce(m)
    local m = L_unwrap(m)
