@@ -55,6 +55,8 @@ local function L_unwrap(w)
    return w.internal
 end
 
+--- Returns a module that will create a stencil of the image at every input.
+-- [a] -> [[a]]
 function L.stencil(w, h)
    local function type_func(t)
 	  assert(t.kind == 'array2d', 'stencil requires input type to be of array2d')
@@ -64,6 +66,9 @@ function L.stencil(w, h)
    return L_wrap(T.stencil(w, h, type_func))
 end
 
+--- Returns a module that will duplicate the input to a 2d array.
+-- This module will return a 2d array where every element is equal to the input once applied.
+-- a -> [a]
 function L.broadcast(w, h)
    local function type_func(t)
 	  return T.array2d(t, w, h)
@@ -72,6 +77,7 @@ function L.broadcast(w, h)
    return L_wrap(T.broadcast(w, h, type_func))
 end
 
+--- Returns a module that will pad the input by a specified amount.
 function L.pad(u, d, l, r)
    local function type_func(t)
 	  assert(t.kind == 'array2d', 'pad requires input type of array2d')
@@ -81,6 +87,8 @@ function L.pad(u, d, l, r)
    return L_wrap(T.pad(u, d, l, r, type_func))
 end
 
+--- Returns a module that will zip two inputs together.
+-- ([a], [b]) -> [(a, b)].
 function L.zip()
    local function type_func(t)
 	  assert(t.kind == 'tuple', 'zip requires input type to be tuple')
@@ -114,6 +122,9 @@ function L.zip()
    return L_wrap(T.zip(type_func))
 end
 
+--- Returns a module that will recursively zip inputs.
+-- Given a tuple of inputs, it will recursively apply maps of zips while all inputs share the same outer array type.
+-- For example, ([[[a]]], [[b]]) -> [[([a], b)]].
 function L.zip_rec()
    return L_wrap(
 	  function(v)
@@ -161,14 +172,17 @@ local function binop_type_func(t)
    return t.ts[1]
 end   
 
+--- Returns a module that multiplies two primitive types.
 function L.mul()
    return L_wrap(T.mul(binop_type_func))
 end
 
+--- Returns a module that adds two primitive types.
 function L.add()
    return L_wrap(T.add(binop_type_func))
 end
 
+--- Returns a module that is a map given a module to apply.
 function L.map(m)
    local m = L_unwrap(m)
    
@@ -185,14 +199,26 @@ function L.map(m)
    return L_wrap(T.map(m, type_func))
 end
 
-function L.chain(a, b)
+--- Returns a module that is a sequence of modules being applied,
+function L.chain(...)
+   -- save varargs so returned function can use them
+   local ms = {}
+   for i,m in ipairs({...}) do
+	  ms[i] = m
+   end
+   
    return L_wrap(
 	  function(v)
-		 return L.apply(b, L.apply(a, v))
+		 for _,m in ipairs(ms) do
+			v = L.apply(m, v)
+		 end
+		 return v
 	  end
    )
 end
 
+--- Returns a module that is a reduce given the provided module.
+-- This is implemented using a tree-reduction.
 function L.reduce(m)
    local m = L_unwrap(m)
    
@@ -204,6 +230,7 @@ function L.reduce(m)
    return L_wrap(T.reduce(m, type_func))
 end
 
+--- Applies the module on the provided value.
 function L.apply(m, v)
    local m = L_unwrap(m)
 
@@ -214,18 +241,22 @@ function L.apply(m, v)
    end
 end
 
+--- Creates an input value given a type.
 function L.input(t)
    return T.input(t, t)
 end
 
+--- Creates a 1d array type.
 function L.array(t, n)
    return T.array(t, n)
 end
 
+--- Creates a 2d array type.
 function L.array2d(t, w, h)
    return T.array2d(t, w, h)
 end
 
+--- Creates a tuple type given any number of types.
 function L.tuple(...)
    if List:isclassof(...) then
 	  return T.tuple(...)
@@ -236,18 +267,27 @@ function L.tuple(...)
    end
 end
 
+--- A shorthand for uint(32)
 function L.uint32()
    return T.uint(32)
 end
+-- L.uint32 = T.uint(32)
 
+--- A shorthand for uint(8)
 function L.uint8()
    return T.uint(8)
 end
+-- L.uint8 = T.uint(8)
 
+--- A placeholder that can be replaced later.
+-- This might be needed for feedback loops.
+-- @todo: figure out if this is actually needed.
+-- @tparam Type t the type of the placeholder
 function L.placeholder(t)
    return T.placeholder(t, t)
 end
 
+--- Concatenates any number of values.
 function L.concat(...)
    local t = {}
    for i,v in ipairs({...}) do
@@ -257,10 +297,12 @@ function L.concat(...)
    return T.concat(List{...}, L.tuple(t))
 end
 
+--- Returns a compile-time constant.
 function L.const(t, v)
    return T.const(t, v, t)
 end
 
+--- Creates a module given a value and an input variable.
 function L.lambda(f, x)
    local function type_func(t)
 	  assert(tostring(x.type) == tostring(t))
@@ -270,6 +312,7 @@ function L.lambda(f, x)
    return L_wrap(T.lambda(f, x, type_func))
 end
 
+--- Exports library functions to the global namespace.
 function L.import()
    for name, fun in pairs(L) do
 	  rawset(_G, name, fun)
