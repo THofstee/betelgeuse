@@ -689,15 +689,11 @@ local function transform(m)
    end)
 end
 
--- @todo: implement flattening for rigel modules so we can inspect the changeRate sequences
-local function flatten(m)
-   
-end
-
 -- @todo: add a function to import library into the global namespace
 -- @todo: add something like betel(function(I) map(f)(I) end) that will let you declare lambdas more easily
 -- @todo: add something like an extra class that when called will lower the module into rigel and give you back something
 -- @todo: remove the rigel harness calls, or make a nicer way to do that
+-- @todo: add some sort of support for cross-module optimizations
 
 local x = L.input(L.uint8())
 local c = L.const(L.uint8(), const_val)
