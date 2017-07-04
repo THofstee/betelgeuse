@@ -1,3 +1,5 @@
+--- A high level language for Rigel.
+-- @module lang
 local asdl = require 'asdl'
 local List = asdl.List
 
