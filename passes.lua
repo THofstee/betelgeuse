@@ -14,6 +14,7 @@ local P = {}
 
 local dispatch_mt = {
    __call = function(t, m)
+	  assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
 	  return t[m.kind](m)
    end
 }
@@ -178,13 +179,21 @@ end
 P.devectorize = devectorize
 
 local function change_rate(t, util)
-   local arr_t = t.over
-   local w = t.size[1]
-   local h = t.size[2]
-
    if t:isNamed() and t.generator == 'Handshake' then
    	  t = t.params.A
    end
+
+   local arr_t, w, h
+   if t:isArray() then
+	  arr_t = t.over
+	  w = t.size[1]
+	  h = t.size[2]
+   else
+	  arr_t = t
+	  w = 1
+	  h = 1
+   end
+
    local input = R.input(R.HS(R.array2d(arr_t, w, h)))
 
    local rate = R.connect{
@@ -262,6 +271,8 @@ local function get_name(m)
 	  return m.kind .. '(' .. get_name(m.fn) .. ')'
    elseif m.kind == 'input' then
 	  return m.kind .. '(' .. tostring(m.type) .. ')'
+   elseif m.makeSystolic then
+	  return m.systolicModule.name
    else
 	  return m.kind
    end
@@ -377,38 +388,164 @@ end
 P.base = base
 
 local function peephole(m)
+   local RS = require 'rigelSimple'
+   local R = require 'rigel'
+
    return m:visitEach(function(cur, inputs)
-		 if get_base(cur) == 'changeRate' then
-			if #inputs == 1 and get_base(inputs[1]) == 'changeRate' then
-			   local temp_cur = cur
-			   local temp_input = inputs[1]
-			   local apply_cur = nil
-			   local apply_input = nil
+		 if cur.kind == 'apply' then
+			if get_base(cur) == 'changeRate' then
+			   if #inputs == 1 and get_base(inputs[1]) == 'changeRate' then
+				  local temp_cur = cur
+				  local temp_input = inputs[1]
+				  local apply_cur = nil
+				  local apply_input = nil
 
-			   while(temp_cur.kind ~= 'changeRate') do
-				  apply_cur = temp_cur
-				  temp_cur = base(temp_cur)
+				  while(temp_cur.kind ~= 'changeRate') do
+					 apply_cur = temp_cur
+					 temp_cur = base(temp_cur)
+				  end
+				  while(temp_input.kind ~= 'changeRate') do
+					 apply_input = temp_input
+					 temp_input = base(temp_input)
+				  end
+
+				  -- print(inspect(temp_cur, {depth = 1}))
+				  -- print(inspect(temp_input, {depth = 1}))
+				  -- print(temp_input.inputRate, temp_input.outputRate)
+				  -- print(temp_cur.inputRate, temp_cur.outputRate)
+
+				  if(temp_cur.inputRate == temp_input.outputRate) then
+					 -- return a change_rate from temp_input.inputRate to temp_cur.outputRate
+					 local input = inputs[1].inputs[1]
+					 local t = input.type
+					 local util = { temp_input.inputRate, temp_cur.outputRate }
+
+					 return RS.connect{
+						input = input,
+						toModule = change_rate(t, util)
+					 }
+				  end
 			   end
-			   while(temp_input.kind ~= 'changeRate') do
-				  apply_input = temp_input
-				  temp_input = base(temp_input)
-			   end
-
-			   print(temp_input.inputRate, temp_input.outputRate)
-			   print(temp_cur.inputRate, temp_cur.outputRate)
-
-			   if(temp_cur.inputRate == temp_input.outputRate) then
-				  -- return a change_rate from temp_input.inputRate to temp_cur.outputRate
-			   end
-
-			   print(inspect(temp_cur, {depth = 1}))
-			   print(inspect(temp_input, {depth = 1}))
 			end
+
+			return RS.connect{
+			   input = inputs[1],
+			   toModule = cur.fn
+			}
 		 end
+
 		 return cur
    end)
 end
-
 P.peephole = peephole
+
+function P.debug(r)
+   -- local Graphviz = require 'graphviz'
+   -- local dot = Graphviz()
+
+   -- local function str(s)
+   -- 	  return "\"" .. tostring(s) .. "\""
+   -- end
+
+   -- local options = {
+   -- 	  depth = 2,
+   -- 	  process = function(item, path)
+   -- 		 if(item == 'loc') then
+   -- 			return nil
+   -- 		 end
+   -- 		 return item
+   -- 	  end
+   -- }
+   
+   -- local verbose = true
+   -- local a = {}
+   -- setmetatable(a, dispatch_mt)
+
+   -- function a.input(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, r.kind .. '(' .. tostring(r.type) .. ')')
+   -- 	  return ident
+   -- end
+
+   -- function a.apply(r)
+   -- 	  local ident = str(r)
+
+   -- 	  if verbose then	   
+   -- 		 dot:node(ident, "apply")
+   -- 		 dot:edge(a(r.fn), ident)
+   -- 		 dot:edge(a(r.inputs[1]), ident)
+   -- 	  else
+   -- 		 dot:edge(a(r.inputs[1]), a(r.fn))
+   -- 	  end
+	  
+   -- 	  return ident
+   -- end
+
+   -- function a.liftHandshake(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, "liftHandshake")
+   -- 	  dot:edge(a(r.fn), ident)
+   -- 	  return ident
+   -- end
+
+   -- function a.changeRate(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, "changeRate[" .. r.inputRate .. "->" .. r.outputRate .. "]")
+   -- 	  return ident
+   -- end
+
+   -- function a.waitOnInput(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, "waitOnInput")
+   -- 	  dot:edge(a(r.fn), ident)
+   -- 	  return ident
+   -- end
+
+   -- function a.map(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, "map")
+   -- 	  return ident
+   -- end
+
+   -- a["lift_slice_typeuint8[1,1]_xl0_xh0_yl0_yh0"] = function(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, "lift_slice_typeuint8[1,1]_xl0_xh0_yl0_yh0")
+   -- 	  return ident
+   -- end
+
+   -- function a.concatArray2d(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, "concatArray2d")
+   -- 	  return ident
+   -- end
+   
+   -- function a.makeHandshake(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, "makeHandshake")
+   -- 	  dot:edge(a(r.fn), ident)
+   -- 	  return ident
+   -- end
+
+   -- function a.fn(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:edge(ident, "fn")
+   -- 	  return ident
+   -- end
+
+   -- function a.lambda(r)
+   -- 	  local ident = str(r)
+   -- 	  dot:node(ident, r.kind)
+   -- 	  dot:edge(a(r.input), ident)
+   -- 	  dot:edge(a(r.output), ident)
+   -- 	  return ident
+   -- end
+
+   -- a(r)
+   -- dot:write('dbg/graph.dot')
+   -- dot:compile('dbg/graph.dot', 'png')
+   
+   -- -- print(inspect(r, options))
+   -- -- dot:render('dbg/graph.dot', 'png')
+end
 
 return P

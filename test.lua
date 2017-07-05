@@ -94,13 +94,13 @@ local add_c = L.lambda(L.add()(L.concat(x, c)), x)
 local r2 = translate(add_c(x))
 local r3 = translate(add_c)
 local r4 = streamify(translate(add_c))
--- print(inspect(r2:calcSdfRate(r2)))
 -- R.harness{ fn = R.HS(translate(m)),
 --            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test", outSize = im_size }
+--            outFile = "test-0translate", outSize = im_size }
 
 -- local dut, stream_out = streamify(translate(m))
 local stream_out = streamify(translate(m))
+print("--- After Streamify ---")
 stream_out.output:visitEach(function(cur)
 	  print(get_name(cur))
 	  print(inspect(cur:calcSdfRate(stream_out.output)))
@@ -108,9 +108,10 @@ end)
 
 -- R.harness{ fn = stream_out,
 --            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test2", outSize = im_size }
+--            outFile = "test-1streamify", outSize = im_size }
 
 local stream_out = transform(stream_out.output)
+print("--- After Transform ---")
 stream_out:visitEach(function(cur)
 	  print(get_name(cur))
 	  print(inspect(cur:calcSdfRate(stream_out)))
@@ -121,14 +122,29 @@ stream_out = R.defineModule{
    input = input,
    output = stream_out
 }
-
-local stream_out = peephole(stream_out.output)
-
 -- R.harness{ fn = stream_out,
 --            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test3", outSize = im_size }
+--            outFile = "test-2transform", outSize = im_size }
 
--- print(inspect(dut:calcSdfRate(stream_out)))
+local stream_out = peephole(stream_out.output)
+print("--- After Peephole ---")
+stream_out:visitEach(function(cur)
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(stream_out)))
+end)
+
+local input = stream_out.inputs[1].inputs[1].inputs[1].inputs[1].inputs[1].inputs[1]
+stream_out = R.defineModule{
+   input = input,
+   output = stream_out
+}
+-- R.harness{ fn = stream_out,
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test-3peephole", outSize = im_size }
+P.debug(stream_out)
+R.harness{ fn = stream_out,
+           inFile = "box_32_16.raw", inSize = im_size,
+           outFile = "test", outSize = im_size }
 
 local r_m = translate(m)
 -- R.harness{ fn = R.HS(r_m),
