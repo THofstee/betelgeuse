@@ -6,7 +6,7 @@ env:
   - LUA="luajit"
 
 before_install:
-  - pip instal hererocks
+  - pip install hererocks
   - hererocks here -r^ --$LUA
   - export PATH=$PATH:$PWD/here/bin
   - eval `luarocks path --bin`
