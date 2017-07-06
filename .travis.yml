@@ -3,7 +3,7 @@ language: python
 sudo: false
 
 env:
-  - LUA="luajit"
+  - LUA="luajit @"
 
 before_install:
   - pip install hererocks
