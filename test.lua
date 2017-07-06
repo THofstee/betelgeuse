@@ -4,30 +4,6 @@ local L = require 'lang'
    proving grounds
 --]]
 
--- ([uint32], [uint32]) -> [(uint32, uint32)]
--- ((uncurry zip) (a, b))
-local a = L.input(L.array2d(L.uint32(), 3, 3))
-local b = L.input(L.array2d(L.uint32(), 3, 3))
-local c = L.zip()(L.concat(a, b))
-local d = L.zip_rec()(L.concat(a, b))
-assert(tostring(c.type) == tostring(d.type))
-
--- ([[uint32]], [[uint32]]) -> [[(uint32, uint32)]]
--- (map (uncurry zip) ((uncurry zip) (a, b)))
-local a = L.input(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5))
-local b = L.input(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5))
-local c = L.map(L.zip())(L.zip()(L.concat(a, b)))
-local d = L.zip_rec()(L.concat(a, b))
-assert(tostring(c.type) == tostring(d.type))
-
--- ([[[uint32]]], [[[uint32]]]) -> [[[(uint32, uint32)]]]
--- (map (map (uncurry zip)) (map (uncurry zip) ((uncurry zip) (a, b))))
-local a = L.input(L.array2d(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5), 7, 7))
-local b = L.input(L.array2d(L.array2d(L.array2d(L.uint32(), 3, 3), 5, 5), 7, 7))
-local c = L.map(L.map(L.zip()))(L.map(L.zip())(L.zip()(L.concat(a, b))))
-local d = L.zip_rec()(L.concat(a, b))
-assert(tostring(c.type) == tostring(d.type))
-
 -- testing lambda
 local x = L.input(L.uint32())
 local y = L.add()(L.concat(x, L.const(L.uint32(), 4)))
