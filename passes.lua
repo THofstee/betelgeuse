@@ -215,6 +215,7 @@ local function change_rate(t, util)
 end
 P.change_rate = change_rate
 
+-- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
 local function streamify(m)
@@ -244,19 +245,12 @@ local function streamify(m)
 	  toModule = devectorize(t, w, h)
    }
 
-   -- @todo: this should probably only return stream_out
-   -- @todo: need to figure out a better way of figuring out what to calcSdfRate on
-   -- @todo: this should also return a lambda
    return R.defineModule{
 	  input = stream_in,
 	  output = stream_out
    }
-   -- return vec_out, stream_out
 end
 P.streamify = streamify
-
--- local dut, stream_out = streamify(translate(m))
--- print(inspect(dut:calcSdfRate(stream_out)))
 
 local reduce_rate = {}
 setmetatable(reduce_rate, dispatch_mt)
@@ -363,7 +357,6 @@ local function transform(m)
 			end
 		 end
 		 
-		 -- @todo: this should also return a lambda
 		 return cur
    end
 
@@ -426,13 +419,7 @@ local function peephole(m)
 					 temp_input = base(temp_input)
 				  end
 
-				  -- print(inspect(temp_cur, {depth = 1}))
-				  -- print(inspect(temp_input, {depth = 1}))
-				  -- print(temp_input.inputRate, temp_input.outputRate)
-				  -- print(temp_cur.inputRate, temp_cur.outputRate)
-
 				  if(temp_cur.inputRate == temp_input.outputRate) then
-					 -- return a change_rate from temp_input.inputRate to temp_cur.outputRate
 					 local input = inputs[1].inputs[1]
 					 local t = input.type
 					 local util = { temp_input.inputRate, temp_cur.outputRate }
