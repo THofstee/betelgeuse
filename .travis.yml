@@ -19,7 +19,7 @@ script:
   - busted -c
 
 after_success:
-  - luacov-coveralls -v
+  - luacov-coveralls -v -ilang -ipasses -ebusted -espec
 
 notifications:
   email:
