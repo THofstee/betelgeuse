@@ -315,11 +315,6 @@ local function transform(m)
 				  m = unwrap_handshake(m)
 				  m = m.output.fn
 
-				  -- local input = RS.connect{
-				  -- 	 input = inptus[1],
-				  -- 	 toModule = devectorize(m.inputType.over, m.W, m.H)
-				  -- }
-
 				  local w = m.W
 				  local h = m.H
 				  local max_reduce = m.W * m.H
@@ -335,14 +330,9 @@ local function transform(m)
 					 toModule = RS.HS(m)
 				  }
 
-				  -- local output = RS.connect{
-				  -- 	 input = inter,
-				  -- 	 toModule = change_rate(inter.type.params.A, { util[2], util[1] })
-				  -- }
-
 				  local output = RS.connect{
-					 input = inter,
-					 toModule = vectorize(inter.type.params.A.over, w, h)
+				  	 input = inter,
+				  	 toModule = change_rate(inter.type.params.A, { util[2], util[1] })
 				  }
 
 				  return output
