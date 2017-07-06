@@ -86,34 +86,23 @@ end)
 --            inFile = "box_32_16.raw", inSize = im_size,
 --            outFile = "test-1streamify", outSize = im_size }
 
-local stream_out = transform(stream_out.output)
+local stream_out = transform(stream_out)
 print("--- After Transform ---")
-stream_out:visitEach(function(cur)
+stream_out.output:visitEach(function(cur)
 	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out)))
+	  print(inspect(cur:calcSdfRate(stream_out.output)))
 end)
 
-local input = stream_out.inputs[1].inputs[1].inputs[1].inputs[1].inputs[1].inputs[1]
-stream_out = R.defineModule{
-   input = input,
-   output = stream_out
-}
 -- R.harness{ fn = stream_out,
 --            inFile = "box_32_16.raw", inSize = im_size,
 --            outFile = "test-2transform", outSize = im_size }
 
-local stream_out = peephole(stream_out.output)
+local stream_out = peephole(stream_out)
 print("--- After Peephole ---")
-stream_out:visitEach(function(cur)
+stream_out.output:visitEach(function(cur)
 	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out)))
+	  print(inspect(cur:calcSdfRate(stream_out.output)))
 end)
-
-local input = stream_out.inputs[1].inputs[1].inputs[1].inputs[1].inputs[1].inputs[1]
-stream_out = R.defineModule{
-   input = input,
-   output = stream_out
-}
 -- R.harness{ fn = stream_out,
 --            inFile = "box_32_16.raw", inSize = im_size,
 --            outFile = "test-3peephole", outSize = im_size }

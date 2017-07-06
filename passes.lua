@@ -279,16 +279,23 @@ local function get_name(m)
 end
 P.get_name = get_name
 
+-- @todo: maybe this should only take in a lambda as input
 local function transform(m)
    local RS = require 'rigelSimple'
    local R = require 'rigel'
-   local output = m
+
+   local output
+   if m.kind == 'lambda' then
+	  output = m.output
+   else
+	  output = m
+   end
 
    local function get_utilization(m)
 	  return m:calcSdfRate(output)
    end
 
-   return m:visitEach(function(cur, inputs)
+   local function optimize(cur, inputs)
 		 local util = get_utilization(cur) or { 0, 0 }
 		 if cur.kind == 'apply' then
 			if util[2] > 1 then
@@ -358,7 +365,16 @@ local function transform(m)
 		 
 		 -- @todo: this should also return a lambda
 		 return cur
-   end)
+   end
+
+   if m.kind == 'lambda' then
+	  return RS.defineModule{
+		 input = m.input,
+		 output = m.output:visitEach(optimize)
+	  }
+   else
+	  return m:visitEach(optimize)
+   end   
 end
 P.transform = transform
 
@@ -387,11 +403,12 @@ end
 
 P.base = base
 
+-- @todo: maybe this should only take in a lambda as input
 local function peephole(m)
    local RS = require 'rigelSimple'
    local R = require 'rigel'
 
-   return m:visitEach(function(cur, inputs)
+   local function optimize(cur, inputs)
 		 if cur.kind == 'apply' then
 			if get_base(cur) == 'changeRate' then
 			   if #inputs == 1 and get_base(inputs[1]) == 'changeRate' then
@@ -435,7 +452,18 @@ local function peephole(m)
 		 end
 
 		 return cur
-   end)
+   end
+
+   if m.kind == 'lambda' then
+	  return RS.defineModule{
+		 input = m.input,
+		 output = m.output:visitEach(optimize)
+	  }
+   else
+	  return m:visitEach(optimize)
+   end
+   
+   return 
 end
 P.peephole = peephole
 
