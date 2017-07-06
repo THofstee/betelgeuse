@@ -12,6 +12,7 @@ before_install:
   - eval `luarocks path --bin`
   - luarocks install luacov-coveralls
   - luarocks install busted
+  - luarocks install luafilesystem
 
 install:
 

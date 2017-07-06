@@ -129,3 +129,64 @@ describe('usage #lib', function()
 						end)
 			end)
 end)
+
+--[[
+   Examples
+--]]
+describe('some examples', function()
+			local L = require 'lang'
+
+			it('add constant to image (broadcast)', function()
+				  local im_size = { 1920, 1080 }
+				  local I = input(array2d(uint8(), im_size[1], im_size[2]))
+				  local c = const(uint8(), 1)
+				  local bc = broadcast(im_size[1], im_size[2])(c)
+				  local m = map(add())(zip_rec()(concat(I, bc)))
+			end)
+
+			it('add constant to image (lambda)', function()
+				  local im_size = { 32, 16 }
+				  local const_val = 30
+				  local I = input(array2d(uint8(), im_size[1], im_size[2]))
+				  local x = input(uint8())
+				  local c = const(uint8(), const_val)
+				  local add_c = lambda(add()(concat(x, c)), x)
+				  local m_add = map(add_c)
+			end)
+
+			it('add two image streams', function()
+				  local im_size = { 1920, 1080 }
+				  local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+				  local J = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+				  local ij = L.zip_rec()(L.concat(I, J))
+				  local m = L.map(L.add())(ij)
+			end)
+
+			it('convolution', function()
+				  local im_size = { 1920, 1080 }
+				  local pad_size = { 1920+16, 1080+3 }
+				  local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+				  local pad = L.pad(2, 1, 8, 8)(I)
+				  local st = L.stencil(4, 4)(pad)
+				  local taps = L.const(L.array2d(L.uint8(), 4, 4), {
+										  {  4, 14, 14,  4 },
+										  { 14, 32, 32, 14 },
+										  { 14, 32, 32, 14 },
+										  {  4, 14, 14,  4 }})
+				  local wt = L.broadcast(pad_size[1], pad_size[2])(taps)
+				  local st_wt = L.zip_rec()(L.concat(st, wt))
+				  local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
+				  local m = conv(st_wt)
+				  local m2 = L.map(L.reduce(L.add()))(L.map(L.map(L.mul()))(st_wt))
+			end)
+
+			it('files in the examples directory', function()
+				  local lfs = require 'lfs'
+				  local dir = lfs.currentdir() .. '/examples/'
+				  for iter, dir_obj in lfs.dir(dir) do
+					 if string.find(iter, '.lua') then
+						dofile(dir .. iter)
+					 end
+				  end
+			end)
+end)
