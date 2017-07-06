@@ -391,21 +391,17 @@ local function peephole(m)
    local RS = require 'rigelSimple'
    local R = require 'rigel'
 
-   local function optimize(cur, inputs)
+   local function fuse_changeRate(cur, inputs)
 		 if cur.kind == 'apply' then
 			if get_base(cur) == 'changeRate' then
 			   if #inputs == 1 and get_base(inputs[1]) == 'changeRate' then
 				  local temp_cur = cur
 				  local temp_input = inputs[1]
-				  local apply_cur = nil
-				  local apply_input = nil
 
 				  while(temp_cur.kind ~= 'changeRate') do
-					 apply_cur = temp_cur
 					 temp_cur = base(temp_cur)
 				  end
 				  while(temp_input.kind ~= 'changeRate') do
-					 apply_input = temp_input
 					 temp_input = base(temp_input)
 				  end
 
@@ -431,13 +427,38 @@ local function peephole(m)
 		 return cur
    end
 
+   local function removal(cur, inputs)
+		 if cur.kind == 'apply' then
+			if get_base(cur) == 'changeRate' then
+			   local temp_cur = cur
+			   while(temp_cur.kind ~= 'changeRate') do
+				  temp_cur = base(temp_cur)
+			   end
+			   if temp_cur.inputRate == temp_cur.outputRate then
+				  return inputs[1]
+			   end
+			end
+
+			return RS.connect{
+			   input = inputs[1],
+			   toModule = cur.fn
+			}
+		 end
+
+		 return cur
+   end
+   
    if m.kind == 'lambda' then
+	  local output = m.output:visitEach(fuse_changeRate)
+	  output = output:visitEach(removal)
 	  return RS.defineModule{
 		 input = m.input,
-		 output = m.output:visitEach(optimize)
+		 output = output
 	  }
    else
-	  return m:visitEach(optimize)
+	  local output = m:visitEach(fuse_changeRate)
+	  output = output:visitEach(removal)
+	  return output
    end
    
    return 

@@ -1,16 +1,6 @@
 local inspect = require 'inspect'
 local L = require 'lang'
 --[[
-   proving grounds
---]]
-
--- testing lambda
-local x = L.input(L.uint32())
-local y = L.add()(L.concat(x, L.const(L.uint32(), 4)))
-local f = L.lambda(y, x)
-local z = f(L.const(L.uint32(), 1))
-
---[[
    tests with rigel
 --]]
 local P = require 'passes'
