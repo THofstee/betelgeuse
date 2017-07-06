@@ -7,7 +7,7 @@ env:
 
 before_install:
   - pip install hererocks
-  - hererocks here -r^ --$LUA
+  - hererocks here -rlatest --$LUA
   - export PATH=$PATH:$PWD/here/bin
   - eval `luarocks path --bin`
   - luarocks install luacov-coveralls
