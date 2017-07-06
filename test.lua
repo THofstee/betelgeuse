@@ -96,6 +96,13 @@ end)
 -- R.harness{ fn = stream_out,
 --            inFile = "box_32_16.raw", inSize = im_size,
 --            outFile = "test-3peephole", outSize = im_size }
+
+local stream_out = P.handshakes(stream_out)
+print("--- After Handshake Optimization ---")
+stream_out.output:visitEach(function(cur)
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(stream_out.output)))
+end)
 P.debug(stream_out)
 R.harness{ fn = stream_out,
            inFile = "box_32_16.raw", inSize = im_size,

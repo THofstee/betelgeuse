@@ -259,8 +259,8 @@ P.reduce_rate = reduce_rate
 local function get_name(m)
    if m.kind == 'lambda' then
 	  return m.kind .. '(' .. get_name(m.output) .. ')'
-   -- elseif m.kind == 'apply' then
-   -- 	  return m.kind .. '(' .. get_name(m.fn) .. ',' .. get_name(m.inputs[1]) .. ')'
+	  -- elseif m.kind == 'apply' then
+	  -- 	  return m.kind .. '(' .. get_name(m.fn) .. ',' .. get_name(m.inputs[1]) .. ')'
    elseif m.fn then
 	  return m.kind .. '(' .. get_name(m.fn) .. ')'
    elseif m.kind == 'input' then
@@ -290,64 +290,64 @@ local function transform(m)
    end
 
    local function optimize(cur, inputs)
-		 local util = get_utilization(cur) or { 0, 0 }
-		 if cur.kind == 'apply' then
-			if util[2] > 1 then
-			   local t = inputs[1].type
-			   if t:isNamed() and t.generator == 'Handshake' then
-				  t = t.params.A
-			   end
-			   
-			   local function unwrap_handshake(m)
-				  if m.kind == 'makeHandshake' then
-					 return m.fn
-				  else
-					 return m
-				  end
-			   end
-
-			   local function reduce_rate(m, util)
-				  local input = RS.connect{
-					 input = inputs[1],
-					 toModule = change_rate(t, util)
-				  }
-
-				  m = unwrap_handshake(m)
-				  m = m.output.fn
-
-				  local w = m.W
-				  local h = m.H
-				  local max_reduce = m.W * m.H
-				  local parallelism = max_reduce * util[1]/util[2]
-				  
-				  m = RS.modules.map{
-					 fn = m.fn,
-					 size = { parallelism }
-				  }
-
-				  local inter = RS.connect{
-					 input = input,
-					 toModule = RS.HS(m)
-				  }
-
-				  local output = RS.connect{
-				  	 input = inter,
-				  	 toModule = change_rate(inter.type.params.A, { util[2], util[1] })
-				  }
-
-				  return output
-			   end
-			   
-			   return reduce_rate(cur.fn, util)
-			else
-			   return RS.connect{
-				  input = inputs[1],
-				  toModule = cur.fn
-			   }
+	  local util = get_utilization(cur) or { 0, 0 }
+	  if cur.kind == 'apply' then
+		 if util[2] > 1 then
+			local t = inputs[1].type
+			if t:isNamed() and t.generator == 'Handshake' then
+			   t = t.params.A
 			end
+			
+			local function unwrap_handshake(m)
+			   if m.kind == 'makeHandshake' then
+				  return m.fn
+			   else
+				  return m
+			   end
+			end
+
+			local function reduce_rate(m, util)
+			   local input = RS.connect{
+				  input = inputs[1],
+				  toModule = change_rate(t, util)
+			   }
+
+			   m = unwrap_handshake(m)
+			   m = m.output.fn
+
+			   local w = m.W
+			   local h = m.H
+			   local max_reduce = m.W * m.H
+			   local parallelism = max_reduce * util[1]/util[2]
+			   
+			   m = RS.modules.map{
+				  fn = m.fn,
+				  size = { parallelism }
+			   }
+
+			   local inter = RS.connect{
+				  input = input,
+				  toModule = RS.HS(m)
+			   }
+
+			   local output = RS.connect{
+				  input = inter,
+				  toModule = change_rate(inter.type.params.A, { util[2], util[1] })
+			   }
+
+			   return output
+			end
+			
+			return reduce_rate(cur.fn, util)
+		 else
+			return RS.connect{
+			   input = inputs[1],
+			   toModule = cur.fn
+			}
 		 end
-		 
-		 return cur
+	  end
+	  
+	  return cur
    end
 
    if m.kind == 'lambda' then
@@ -360,19 +360,6 @@ local function transform(m)
    end   
 end
 P.transform = transform
-
-local function get_base(m)
-   if m.kind == 'lambda' then
-	  return get_base(m.output)
-   elseif m.fn then
-	  return get_base(m.fn)
-   elseif m.kind == 'input' then
-	  return m.kind .. '(' .. tostring(m.type) .. ')'
-   else
-	  return m.kind
-   end
-end
-P.get_base = get_base
 
 local function base(m)
    if m.kind == 'lambda' then
@@ -392,60 +379,50 @@ local function peephole(m)
    local R = require 'rigel'
 
    local function fuse_changeRate(cur, inputs)
-		 if cur.kind == 'apply' then
-			if get_base(cur) == 'changeRate' then
-			   if #inputs == 1 and get_base(inputs[1]) == 'changeRate' then
-				  local temp_cur = cur
-				  local temp_input = inputs[1]
+	  if cur.kind == 'apply' then
+		 if base(cur).kind == 'changeRate' then
+			if #inputs == 1 and base(inputs[1]).kind == 'changeRate' then
+			   local temp_cur = base(cur)
+			   local temp_input = base(inputs[1])
 
-				  while(temp_cur.kind ~= 'changeRate') do
-					 temp_cur = base(temp_cur)
-				  end
-				  while(temp_input.kind ~= 'changeRate') do
-					 temp_input = base(temp_input)
-				  end
+			   if(temp_cur.inputRate == temp_input.outputRate) then
+				  local input = inputs[1].inputs[1]
+				  local t = input.type
+				  local util = { temp_input.inputRate, temp_cur.outputRate }
 
-				  if(temp_cur.inputRate == temp_input.outputRate) then
-					 local input = inputs[1].inputs[1]
-					 local t = input.type
-					 local util = { temp_input.inputRate, temp_cur.outputRate }
-
-					 return RS.connect{
-						input = input,
-						toModule = change_rate(t, util)
-					 }
-				  end
+				  return RS.connect{
+					 input = input,
+					 toModule = change_rate(t, util)
+				  }
 			   end
 			end
-
-			return RS.connect{
-			   input = inputs[1],
-			   toModule = cur.fn
-			}
 		 end
 
-		 return cur
+		 return RS.connect{
+			input = inputs[1],
+			toModule = cur.fn
+		 }
+	  end
+
+	  return cur
    end
 
    local function removal(cur, inputs)
-		 if cur.kind == 'apply' then
-			if get_base(cur) == 'changeRate' then
-			   local temp_cur = cur
-			   while(temp_cur.kind ~= 'changeRate') do
-				  temp_cur = base(temp_cur)
-			   end
-			   if temp_cur.inputRate == temp_cur.outputRate then
-				  return inputs[1]
-			   end
+	  if cur.kind == 'apply' then
+		 if base(cur).kind == 'changeRate' then
+			local temp_cur = base(cur)
+			if temp_cur.inputRate == temp_cur.outputRate then
+			   return inputs[1]
 			end
-
-			return RS.connect{
-			   input = inputs[1],
-			   toModule = cur.fn
-			}
 		 end
 
-		 return cur
+		 return RS.connect{
+			input = inputs[1],
+			toModule = cur.fn
+		 }
+	  end
+
+	  return cur
    end
    
    if m.kind == 'lambda' then
@@ -464,6 +441,77 @@ local function peephole(m)
    return 
 end
 P.peephole = peephole
+
+local function get_input(m)
+   while m.inputs[1] do
+	  m = m.inputs[1]
+   end
+   return m
+end
+
+local function needs_hs(m)
+   if m.kind == 'changeRate' then
+	  return true
+   else
+	  return false
+   end
+end
+
+local function handshakes(m)
+   local RS = require 'rigelSimple'
+   local R = require 'rigel'
+
+   -- Remove handshakes on everything as we iterate
+   local function removal(cur, inputs)
+	  if cur.kind == 'apply' then
+		 if needs_hs(base(cur)) then
+			-- If something needs a handshake, discard the changes
+			return cur
+		 elseif inputs[1].type.generator == 'Handshake' then
+			-- Something earlier failed, so don't remove handshake here
+			return RS.connect{
+			   input = inputs[1],
+			   toModule = cur.fn
+			}
+		 else
+			-- Our input isn't handshaked, so remove handshake if we need to
+			if cur.fn.kind == 'makeHandshake' then
+			   return RS.connect{
+				  input = inputs[1],
+				  toModule = cur.fn.fn
+			   }
+			end
+			
+			return RS.connect{
+			   input = inputs[1],
+			   toModule = cur.fn
+			}
+		 end
+	  elseif cur.kind == 'input' then
+		 -- Start by removing handshake on all inputs
+		 if cur.type.generator == 'Handshake' then
+			return RS.input(cur.type.params.A)
+		 end
+	  end
+	  return cur
+   end
+   
+   if m.kind == 'lambda' then
+	  local output = m.output:visitEach(removal)
+	  local input = get_input(output)
+	  
+	  return RS.defineModule{
+		 input = input,
+		 output = output
+	  }
+   else
+	  local output = m:visitEach(removal)
+	  return output
+   end
+   
+   return 
+end
+P.handshakes = handshakes
 
 function P.debug(r)
    -- local Graphviz = require 'graphviz'
@@ -503,7 +551,7 @@ function P.debug(r)
    -- 	  else
    -- 		 dot:edge(a(r.inputs[1]), a(r.fn))
    -- 	  end
-	  
+   
    -- 	  return ident
    -- end
 
