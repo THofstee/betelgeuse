@@ -180,12 +180,14 @@ describe('some examples', function()
 				  local m2 = L.map(L.reduce(L.add()))(L.map(L.map(L.mul()))(st_wt))
 			end)
 
-			it('files in the examples directory', function()
+			describe('files in the examples directory', function()
 				  local lfs = require 'lfs'
 				  local dir = lfs.currentdir() .. '/examples/'
 				  for iter, dir_obj in lfs.dir(dir) do
 					 if string.find(iter, '.lua') then
-						dofile(dir .. iter)
+						it(iter, function()
+							  dofile(dir .. iter)
+						end)
 					 end
 				  end
 			end)
