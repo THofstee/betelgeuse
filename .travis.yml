@@ -1,0 +1,27 @@
+language: python
+
+sudo: false
+
+env:
+  - LUA="luajit"
+
+before_install:
+  - pip instal hererocks
+  - hererocks here -r^ --$LUA
+  - export PATH=$PATH:$PWD/here/bin
+  - eval `luarocks path --bin`
+  - luarocks install luacov-coveralls
+  - luarocks install busted
+
+install:
+
+script:
+  - busted -c
+
+after_success:
+  - luacov-coveralls -v
+
+notifications:
+  email:
+    on_success: change
+	on_failure: always
