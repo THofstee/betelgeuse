@@ -97,6 +97,8 @@ function translate.pad(m)
    local pad_w = m.type.w
    local pad_h = m.type.h
 
+   -- @todo: have the problem of inputs are not handshaked, but we need HS
+   -- @todo: maybe fix by handshaking everything? HS removal pass seems to work..
    local vec_in = R.input(R.HS(translate(L.array2d(m.type.t, w, h))))
 
    local stream_in = R.connect{
@@ -158,12 +160,11 @@ translate.module = memoize(translate.module)
 
 function translate.apply(a)
    -- propagate output type back to the module
-   local m = a.m
-   m.type = a.type
-   
+   a.m.type = a.type
+
    return R.connect{
 	  input = translate(a.v),
-	  toModule = translate(m)
+	  toModule = translate(a.m)
    }
 end
 translate.apply = memoize(translate.apply)
