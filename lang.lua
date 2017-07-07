@@ -25,8 +25,9 @@ Module = mul
        | map(Module m)
        | reduce(Module m)
        | zip
-       | stencil(number w, number h)
-       | pad(number u, number d, number l, number r)
+       | stencil(number offset_x, number offset_y, number extent_x, number extent_y)
+       | pad(number offset_x, number offset_y, number extent_x, number extent_y)
+# @todo: try to figure out how to remove broadcast entirely, or at least w/h
        | broadcast(number w, number h) # @todo: what about 1d broadcast?
 # @todo: consider changing multiply etc to use the lift feature and lift systolic
 #       | lift # @todo: this should raise rigel modules into this language
@@ -59,13 +60,13 @@ end
 
 --- Returns a module that will create a stencil of the image at every input.
 -- [a] -> [[a]]
-function L.stencil(w, h)
+function L.stencil(off_x, off_y, ext_x, ext_y)
    local function type_func(t)
 	  assert(t.kind == 'array2d', 'stencil requires input type to be of array2d')
-	  return T.array2d(T.array2d(t.t, w, h), t.w, t.h)
+	  return T.array2d(T.array2d(t.t, ext_x, ext_y), t.w, t.h)
    end
    
-   return L_wrap(T.stencil(w, h, type_func))
+   return L_wrap(T.stencil(off_x, off_y, ext_x, ext_y, type_func))
 end
 
 --- Returns a module that will duplicate the input to a 2d array.
@@ -80,13 +81,13 @@ function L.broadcast(w, h)
 end
 
 --- Returns a module that will pad the input by a specified amount.
-function L.pad(u, d, l, r)
+function L.pad(off_x, off_y, ext_x, ext_y)
    local function type_func(t)
 	  assert(t.kind == 'array2d', 'pad requires input type of array2d')
-	  return T.array2d(t.t, t.w+l+r, t.h+u+d)
+	  return T.array2d(t.t, t.w+ext_x, t.h+ext_y)
    end
 
-   return L_wrap(T.pad(u, d, l, r, type_func))
+   return L_wrap(T.pad(off_x, off_y, ext_x, ext_y, type_func))
 end
 
 --- Returns a module that will zip two inputs together.
@@ -316,8 +317,15 @@ end
 
 --- Exports library functions to the global namespace.
 function L.import()
+   local reserved = {
+	  import = true,
+	  debug = true,
+   }
+   
    for name, fun in pairs(L) do
-	  rawset(_G, name, fun)
+	  if not reserved[name] then
+		 rawset(_G, name, fun)
+	  end
    end
 end
 

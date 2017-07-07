@@ -26,14 +26,23 @@ function translate.wrapped(w)
    return translate(L.unwrap(w))
 end
 
+function translate.array2d(t)
+   return R.array2d(translate.type(t.t), t.w*t.h, 1)
+end
+translate.array2d = memoize(translate.array2d)
+
+function translate.array(t)
+   return R.array(translate.type(t.t), t.n)
+end
+translate.array = memoize(translate.array)
+
+function translate.uint(t)
+   return rtypes.uint(t.n)
+end
+translate.uint = memoize(translate.uint)
+
 function translate.type(t)
-   if T.array2d:isclassof(t) then
-	  return R.array2d(translate.type(t.t), t.w*t.h, 1)
-   elseif T.array:isclassof(t) then
-	  return R.array(translate.type(t.t), t.n)
-   elseif T.uint:isclassof(t) then
-	  return rtypes.uint(t.n)
-   end
+   return translate(t)
 end
 translate.type = memoize(translate.type)
 
@@ -79,6 +88,64 @@ function translate.add(m)
    }
 end
 translate.add = memoize(translate.add)
+
+function translate.pad(m)
+   local t = translate(m.type)
+   local arr_t = translate(m.type.t)
+   local w = m.type.w-m.extent_x
+   local h = m.type.h-m.extent_y
+   local pad_w = m.type.w
+   local pad_h = m.type.h
+
+   -- @todo: we need a HS type here, but the input probably wasn't HS
+   -- @todo: need some way of propagating handshake back through inputs
+   local vec_in = R.input(R.HS(translate(L.array2d(m.type.t, w, h))))
+
+   local stream_in = R.connect{
+	  input = vec_in,
+	  toModule = R.HS(R.modules.devectorize{
+			type = arr_t,
+			H = 1,
+			V = w*h
+		 }
+	  )
+   }
+
+   local stream_out = R.connect{
+	  input = stream_in,
+	  toModule = R.HS(R.modules.padSeq{
+						 type = translate(m.type.t),
+						 V = 1,
+						 size = { w, h },
+						 pad = { -m.offset_x, m.extent_x+m.offset_x-1, -m.offset_y, m.extent_y+m.offset_y-1 },
+						 value = 0
+	  })
+   }
+
+   local vec_out = R.connect{
+	  input = stream_out,
+	  toModule = R.HS(R.modules.vectorize{
+			type = arr_t,
+			H = 1,
+			V = pad_w*pad_h
+		 }
+	  )
+   }
+
+   return R.defineModule{
+	  input = vec_in,
+	  output = vec_out
+   }
+
+   -- return R.modules.padSeq{
+   -- 	  type = translate(m.type.t),
+   -- 	  V = 1,
+   -- 	  size = { m.type.w-m.extent_x, m.type.h-m.extent_y },
+   -- 	  pad = { -m.offset_x, m.extent_x+m.offset_x-1, -m.offset_y, m.extent_y+m.offset_y-1 },
+   -- 	  value = 0
+   -- }
+end
+translate.pad = memoize(translate.pad)
 
 function translate.module(m)
    if T.add:isclassof(m) then
@@ -620,6 +687,19 @@ function P.debug(r)
    
    -- -- print(inspect(r, options))
    -- -- dot:render('dbg/graph.dot', 'png')
+end
+
+function P.import()
+   local reserved = {
+	  import = true,
+	  debug = true,
+   }
+   
+   for name, fun in pairs(P) do
+	  if not reserved[name] then
+		 rawset(_G, name, fun)
+	  end
+   end
 end
 
 return P

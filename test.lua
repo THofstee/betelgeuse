@@ -37,9 +37,6 @@ local m = create_module(im_size)
 
 -- write_file('box_out.raw', m(read_file('box_32_16.raw')))
 
-local rigel_out = translate(m_add(I))
--- print(inspect(rigel_out:calcSdfRate(rigel_out))) -- this function spits back the utilization of the module
-
 local R = require 'rigelSimple'
 
 local streamify = P.streamify
@@ -124,8 +121,8 @@ local m = L.map(L.add())(ij)
 local im_size = { 1920, 1080 }
 local pad_size = { 1920+16, 1080+3 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local pad = L.pad(2, 1, 8, 8)(I)
-local st = L.stencil(4, 4)(pad)
+local pad = L.pad(-8, -1, 16, 3)(I)
+local st = L.stencil(-1, -1, 4, 4)(pad)
 local taps = L.const(L.array2d(L.uint8(), 4, 4), {
 						{  4, 14, 14,  4 },
 						{ 14, 32, 32, 14 },
@@ -136,7 +133,9 @@ local st_wt = L.zip_rec()(L.concat(st, wt))
 local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
 local m = conv(st_wt)
 local m2 = L.map(L.reduce(L.add()))(L.map(L.map(L.mul()))(st_wt))
+local mod = L.lambda(m2, I)
 
+local res = translate(m2)
 -----
 
 P = 1/4
