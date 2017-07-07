@@ -97,9 +97,13 @@ function translate.pad(m)
    local pad_w = m.type.w
    local pad_h = m.type.h
 
+<<<<<<< HEAD
    -- @todo: we need a HS type here, but the input probably wasn't HS
    -- @todo: need some way of propagating handshake back through inputs
    local vec_in = R.input(R.HS(translate(L.array2d(m.type.t, w, h))))
+=======
+   local vec_in = R.input(R.HS(L.array2d(m.type.t, w, h)))
+>>>>>>> a973f22b46d89cb324814deaaec8016f2968e0fd
 
    local stream_in = R.connect{
 	  input = vec_in,
