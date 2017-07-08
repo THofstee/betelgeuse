@@ -66,12 +66,39 @@ end
 translate.value = memoize(translate.value)
 
 function translate.const(c)
+   -- Flatten an n*m table into a 1*(n*m) table
+   local function flatten_mat(m)
+	  if type(m) == 'number' then
+		 return m
+	  end
+	  
+	  local idx = 0
+	  local res = {}
+	  
+	  for h,row in ipairs(m) do
+		 for w,elem in ipairs(row) do
+			idx = idx + 1
+			res[idx] = elem
+		 end
+	  end
+	  
+	  return res
+   end
+
    return R.constant{
 	  type = translate.type(c.type),
-	  value = c.v
+	  value = flatten_mat(c.v)
    }
 end
 translate.const = memoize(translate.const)
+
+function translate.broadcast(m)
+   return C.broadcast(
+	  translate(m.type),
+	  m.w*m.h
+   )
+end
+translate.broadcast = memoize(translate.broadcast)
 
 function translate.concat(c)
    local translated = {}
@@ -98,7 +125,6 @@ function translate.pad(m)
    local pad_w = m.type.w
    local pad_h = m.type.h
 
-   -- @todo: cast input
    local vec_in = R.input(translate(L.array2d(m.type.t, w, h)))
 
    local cast_in = R.connect{
@@ -187,11 +213,57 @@ end
 translate.pad = memoize(translate.pad)
 
 function translate.stencil(m)
-   print(inspect(m, {depth = 3}))
-   return C.stencil(
-	  translate(m.type.t.t),
-	  
-   )
+   local w = m.type.w
+   local h = m.type.h
+   local in_elem_t = translate(m.type.t.t)
+   local inter_elem_t = R.array2d(in_elem_t, m.type.t.w, m.type.t.h)
+   local out_elem_t = translate(m.type.t)
+
+   local vec_in = R.input(R.array2d(in_elem_t, w*h, 1))
+
+   local cast_in = R.connect{
+	  input = vec_in,
+	  toModule = C.cast(
+		 R.array2d(in_elem_t, w*h, 1),
+		 R.array2d(in_elem_t, w, h)
+	  )
+   }
+
+   local cast_out = R.connect{
+	  input = cast_in,
+	  toModule = C.stencil(
+		 in_elem_t,
+		 w,
+		 h,
+		 m.offset_x,
+		 m.extent_x+m.offset_x-1,
+		 m.offset_y,
+		 m.extent_y+m.offset_y-1
+	  )
+   }
+
+   -- cast inner type
+   local vec_out = R.connect{
+	  input = cast_out,
+	  toModule = C.cast(
+		 R.array2d(inter_elem_t, w, h),
+		 R.array2d(out_elem_t, w, h)
+	  )
+   }
+
+   -- cast outer type
+   local vec2_out = R.connect{
+	  input = vec_out,
+	  toModule = C.cast(
+		 R.array2d(out_elem_t, w, h),
+		 R.array2d(out_elem_t, w*h, 1)
+	  )
+   }
+
+   return R.defineModule{
+	  input = vec_in,
+	  output = vec2_out
+   }
 end
 translate.stencil = memoize(translate.stencil)
 
@@ -209,12 +281,6 @@ translate.module = memoize(translate.module)
 function translate.apply(a)
    -- propagate output type back to the module
    a.m.type = a.type
-
-   local wat = translate(a.v)
-   print(inspect(wat, {depth = 2}))
-   print(inspect(a.m, {depth = 2}))
-   local wat = translate(a.m)
-   print("B")
 
    return R.connect{
 	  input = translate(a.v),
