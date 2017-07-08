@@ -186,6 +186,15 @@ function translate.pad(m)
 end
 translate.pad = memoize(translate.pad)
 
+function translate.stencil(m)
+   print(inspect(m, {depth = 3}))
+   return C.stencil(
+	  translate(m.type.t.t),
+	  
+   )
+end
+translate.stencil = memoize(translate.stencil)
+
 function translate.module(m)
    if T.add:isclassof(m) then
 	  return translate.add(m)
