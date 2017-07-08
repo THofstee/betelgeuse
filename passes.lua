@@ -2,6 +2,7 @@
 -- @module passes
 package.path = "/home/hofstee/rigel/?.lua;/home/hofstee/rigel/src/?.lua;/home/hofstee/rigel/examples/?.lua;" .. package.path
 local R = require 'rigelSimple'
+local C = require 'examplescommon'
 local rtypes = require 'types'
 local memoize = require 'memoize'
 local L = require 'lang'
@@ -92,43 +93,37 @@ translate.add = memoize(translate.add)
 function translate.pad(m)
    local t = translate(m.type)
    local arr_t = translate(m.type.t)
-   local w = m.type.w-m.extent_x
-   local h = m.type.h-m.extent_y
+   local w = m.type.w-m.left-m.right
+   local h = m.type.h-m.top-m.bottom
    local pad_w = m.type.w
    local pad_h = m.type.h
 
-   -- @todo: have the problem of inputs are not handshaked, but we need HS
-   -- @todo: maybe fix by handshaking everything? HS removal pass seems to work..
-   local vec_in = R.input(R.HS(translate(L.array2d(m.type.t, w, h))))
+   -- @todo: cast input
+   local vec_in = R.input(translate(L.array2d(m.type.t, w, h)))
 
-   local stream_in = R.connect{
+   local cast_in = R.connect{
 	  input = vec_in,
-	  toModule = R.HS(R.modules.devectorize{
-			type = arr_t,
-			H = 1,
-			V = w*h
-		 }
+	  toModule = C.cast(
+		 R.array2d(arr_t, w*h, 1),
+		 R.array2d(arr_t, w, h)
 	  )
    }
 
-   local stream_out = R.connect{
-	  input = stream_in,
-	  toModule = R.HS(R.modules.padSeq{
-						 type = translate(m.type.t),
-						 V = 1,
-						 size = { w, h },
-						 pad = { -m.offset_x, m.extent_x+m.offset_x-1, -m.offset_y, m.extent_y+m.offset_y-1 },
-						 value = 0
-	  })
+   local cast_out = R.connect{
+	  input = cast_in,
+	  toModule = R.modules.pad{
+		 type = arr_t,
+		 size = { w, h },
+		 pad = { m.left, m.right, m.top, m.bottom },
+		 value = 0
+	  }
    }
 
    local vec_out = R.connect{
-	  input = stream_out,
-	  toModule = R.HS(R.modules.vectorize{
-			type = arr_t,
-			H = 1,
-			V = pad_w*pad_h
-		 }
+	  input = cast_out,
+	  toModule = C.cast(
+		 R.array2d(arr_t, pad_w, pad_h),
+		 R.array2d(arr_t, pad_w*pad_h, 1)
 	  )
    }
 
@@ -137,13 +132,57 @@ function translate.pad(m)
 	  output = vec_out
    }
 
-   -- return R.modules.padSeq{
-   -- 	  type = translate(m.type.t),
-   -- 	  V = 1,
-   -- 	  size = { m.type.w-m.extent_x, m.type.h-m.extent_y },
-   -- 	  pad = { -m.offset_x, m.extent_x+m.offset_x-1, -m.offset_y, m.extent_y+m.offset_y-1 },
-   -- 	  value = 0
+   -- @todo: cast output
+   -- @todo: return lambda
+   
+   -- -- @todo: have the problem of inputs are not handshaked, but we need HS
+   -- -- @todo: maybe fix by handshaking everything? HS removal pass seems to work..
+   -- -- @todo: add in a non-hs pad, then optimize with reduce_rate like with map. this way we progressively handshake each module, which is what we want to really be doing.
+   -- local vec_in = R.input(R.HS(translate(L.array2d(m.type.t, w, h))))
+
+   -- local stream_in = R.connect{
+   -- 	  input = vec_in,
+   -- 	  toModule = R.HS(R.modules.devectorize{
+   -- 						 type = arr_t,
+   -- 						 H = 1,
+   -- 						 V = w*h
+   -- 										   }
+   -- 	  )
    -- }
+
+   -- local stream_out = R.connect{
+   -- 	  input = stream_in,
+   -- 	  toModule = R.HS(R.modules.padSeq{
+   -- 						 type = translate(m.type.t),
+   -- 						 V = 1,
+   -- 						 size = { w, h },
+   -- 						 pad = { -m.offset_x, m.extent_x+m.offset_x-1, -m.offset_y, m.extent_y+m.offset_y-1 },
+   -- 						 value = 0
+   -- 	  })
+   -- }
+
+   -- local vec_out = R.connect{
+   -- 	  input = stream_out,
+   -- 	  toModule = R.HS(R.modules.vectorize{
+   -- 						 type = arr_t,
+   -- 						 H = 1,
+   -- 						 V = pad_w*pad_h
+   -- 										 }
+   -- 	  )
+   -- }
+
+   -- return R.defineModule{
+   -- 	  input = vec_in,
+   -- 	  output = vec_out
+   -- }
+
+   -- -- return R.modules.padSeq{
+   -- -- 	  type = translate(m.type.t),
+   -- -- 	  V = 1,
+   -- -- 	  size = { m.type.w-m.extent_x, m.type.h-m.extent_y },
+   -- -- 	  pad = { -m.offset_x, m.extent_x+m.offset_x-1, -m.offset_y, m.extent_y+m.offset_y-1 },
+   -- -- 	  value = 0
+   -- -- }
 end
 translate.pad = memoize(translate.pad)
 
@@ -161,6 +200,12 @@ translate.module = memoize(translate.module)
 function translate.apply(a)
    -- propagate output type back to the module
    a.m.type = a.type
+
+   local wat = translate(a.v)
+   print(inspect(wat, {depth = 2}))
+   print(inspect(a.m, {depth = 2}))
+   local wat = translate(a.m)
+   print("B")
 
    return R.connect{
 	  input = translate(a.v),
@@ -194,7 +239,7 @@ translate.map = memoize(translate.map)
 
 P.translate = translate
 
--- wraps a rigel vectorize and cast
+-- wraps a rigel vectorize
 local function vectorize(t, w, h)
    if t:isNamed() and t.generator == 'Handshake' then
 	  t = t.params.A
@@ -219,7 +264,7 @@ local function vectorize(t, w, h)
 end
 P.vectorize = vectorize
 
--- wraps a rigel devectorize and cast
+-- wraps a rigel devectorize
 local function devectorize(t, w, h)
    if t:isNamed() and t.generator == 'Handshake' then
 	  t = t.params.A
@@ -516,11 +561,11 @@ local function get_input(m)
 end
 
 local function needs_hs(m)
-   if m.kind == 'changeRate' then
-	  return true
-   else
-	  return false
-   end
+   local modules = {
+	  changeRate = true,
+   }
+
+   return modules[m.kind]
 end
 
 local function handshakes(m)
