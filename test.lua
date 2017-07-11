@@ -31,7 +31,8 @@ local function create_module(size)
    local c = L.const(L.uint8(), const_val)
    local add_c = L.lambda(L.add()(L.concat(x, c)), x)
    local m_add = L.map(add_c)
-   return L.lambda(m_add(I), I)
+   -- return L.lambda(m_add(I), I)
+   return L.lambda(L.chain(m_add, m_add)(I), I)
 end
 local m = create_module(im_size)
 
@@ -45,70 +46,76 @@ local transform = P.transform
 local changeRate = P.change_rate
 local peephole = P.peephole
 
--- @todo: add a function to import library into the global namespace
 -- @todo: add something like betel(function(I) map(f)(I) end) that will let you declare lambdas more easily
 -- @todo: add something like an extra class that when called will lower the module into rigel and give you back something
 -- @todo: remove the rigel harness calls, or make a nicer way to do that
 -- @todo: add some sort of support for cross-module optimizations
 
 -- local x = L.input(L.uint8())
--- local c = L.const(L.uint8(), const_val)
--- local add_c = L.lambda(L.add()(L.concat(x, c)), x)
--- local r2 = translate(add_c(x))
--- local r3 = translate(add_c)
--- local r4 = streamify(translate(add_c))
--- -- R.harness{ fn = R.HS(translate(m)),
--- --            inFile = "box_32_16.raw", inSize = im_size,
--- --            outFile = "test-0translate", outSize = im_size }
+local c = L.const(L.uint8(), const_val)
+local add_c = L.lambda(L.add()(L.concat(x, c)), x)
+local r2 = translate(add_c(x))
+local r3 = translate(add_c)
+local r4 = streamify(translate(add_c))
+-- R.harness{ fn = R.HS(translate(m)),
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test-0translate", outSize = im_size }
 
--- -- local dut, stream_out = streamify(translate(m))
--- local stream_out = streamify(translate(m))
--- print("--- After Streamify ---")
--- stream_out.output:visitEach(function(cur)
--- 	  print(get_name(cur))
--- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
--- end)
+local out = translate(m)
+print("--- After Translate ---")
+out.output:visitEach(function(cur)
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(out.output)))
+end)
 
--- -- R.harness{ fn = stream_out,
--- --            inFile = "box_32_16.raw", inSize = im_size,
--- --            outFile = "test-1streamify", outSize = im_size }
 
--- local stream_out = transform(stream_out)
--- print("--- After Transform ---")
--- stream_out.output:visitEach(function(cur)
--- 	  print(get_name(cur))
--- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
--- end)
+local stream_out = streamify(translate(m))
+print("--- After Streamify ---")
+stream_out.output:visitEach(function(cur)
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(stream_out.output)))
+end)
 
--- -- R.harness{ fn = stream_out,
--- --            inFile = "box_32_16.raw", inSize = im_size,
--- --            outFile = "test-2transform", outSize = im_size }
-
--- local stream_out = peephole(stream_out)
--- print("--- After Peephole ---")
--- stream_out.output:visitEach(function(cur)
--- 	  print(get_name(cur))
--- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
--- end)
--- -- R.harness{ fn = stream_out,
--- --            inFile = "box_32_16.raw", inSize = im_size,
--- --            outFile = "test-3peephole", outSize = im_size }
-
--- local stream_out = P.handshakes(stream_out)
--- print("--- After Handshake Optimization ---")
--- stream_out.output:visitEach(function(cur)
--- 	  print(get_name(cur))
--- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
--- end)
--- P.debug(stream_out)
 -- R.harness{ fn = stream_out,
 --            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test", outSize = im_size }
+--            outFile = "test-1streamify", outSize = im_size }
 
--- local r_m = translate(m)
--- -- R.harness{ fn = R.HS(r_m),
--- --            inFile = "box_32_16.raw", inSize = im_size,
--- --            outFile = "test", outSize = im_size }
+local stream_out = transform(stream_out)
+print("--- After Transform ---")
+stream_out.output:visitEach(function(cur)
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(stream_out.output)))
+end)
+
+-- R.harness{ fn = stream_out,
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test-2transform", outSize = im_size }
+
+local stream_out = peephole(stream_out)
+print("--- After Peephole ---")
+stream_out.output:visitEach(function(cur)
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(stream_out.output)))
+end)
+-- R.harness{ fn = stream_out,
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test-3peephole", outSize = im_size }
+
+local stream_out = P.handshakes(stream_out)
+print("--- After Handshake Optimization ---")
+stream_out.output:visitEach(function(cur)
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(stream_out.output)))
+end)
+P.debug(stream_out)
+R.harness{ fn = stream_out,
+           inFile = "box_32_16.raw", inSize = im_size,
+           outFile = "test", outSize = im_size }
+
+local r_m = translate(m)
+-- R.harness{ fn = R.HS(r_m),
+--            inFile = "box_32_16.raw", inSize = im_size,
+--            outFile = "test", outSize = im_size }
 
 -- unpack = table.unpack
 
@@ -120,8 +127,8 @@ local ij = L.zip_rec()(L.concat(I, J))
 local m = L.map(L.add())(ij)
 
 -- convolution
-local im_size = { 1920, 1080 }
-local pad_size = { 1920+16, 1080+3 }
+local im_size = { 640, 480 }
+local pad_size = { im_size[1]+16, im_size[2]+3 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local pad = L.pad(8, 8, 2, 1)(I)
 local st = L.stencil(-1, -1, 4, 4)(pad)
@@ -137,24 +144,7 @@ local m = conv(st_wt)
 local m2 = L.map(L.reduce(L.add()))(L.map(L.map(L.mul()))(st_wt))
 local mod = L.lambda(m2, I)
 
-local res = translate(m2)
------
+-- local res = translate(mod)
 
-P = 1/4
-inSize = { 1920, 1080 }
-padSize = { 1920+16, 1080+3 }
-
--- Flatten an n*m table into a 1*(n*m) table
-local function flatten_mat(m)
-   local idx = 0
-   local res = {}
-   
-   for h,row in ipairs(m) do
-	  for w,elem in ipairs(row) do
-		 idx = idx + 1
-		 res[idx] = elem
-	  end
-   end
-   
-   return res
-end
+-- @todo: lucas-kanade
+-- @todo: histogram

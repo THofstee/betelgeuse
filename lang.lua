@@ -48,12 +48,10 @@ local L_mt = {
 }
 
 -- @todo: maybe make this an element in the asdl rep?
--- @todo: anything that returns a module should wrap it first
 local function L_wrap(m)
    return setmetatable({ internal = m, kind = 'wrapped' }, L_mt)
 end
 
--- @todo: anything that consumes a module should unwrap it first
 local function L_unwrap(w)
    return w.internal
 end

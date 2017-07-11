@@ -421,11 +421,23 @@ local function streamify(m)
 	  toModule = vectorize(t, w, h)
    }
 
+   -- @todo: inline the first level of the module
    local vec_out = R.connect{
 	  input = vec_in,
 	  toModule = R.HS(m)
    }
 
+   local vec_out = m.output:visitEach(function(cur, inputs)
+		 if cur.kind == 'input' then
+			return vec_in
+		 end
+		 
+		 return R.connect{
+			input = inputs[1],
+			toModule = R.HS(cur.fn)
+		 }
+   end)
+   
    local stream_out = R.connect{
 	  input = vec_out,
 	  toModule = devectorize(t, w, h)
@@ -499,15 +511,15 @@ local function transform(m)
 			   }
 
 			   m = unwrap_handshake(m)
-			   m = m.output.fn
-
 			   local w = m.W
 			   local h = m.H
-			   local max_reduce = m.W * m.H
+			   m = m.fn
+
+			   local max_reduce = w*h
 			   local parallelism = max_reduce * util[1]/util[2]
 			   
 			   m = RS.modules.map{
-				  fn = m.fn,
+				  fn = m,
 				  size = { parallelism }
 			   }
 
