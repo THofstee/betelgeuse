@@ -2,8 +2,8 @@ language: python
 
 cache:
   pip: true
-  # directories:
-  #   - $PWD/here/bin
+  directories:
+    - $PWD/here
     
 sudo: false
 
