@@ -103,7 +103,7 @@ function L.zip()
 		 local n = t.ts[1].n
 		 local types = {}
 		 for i,t  in ipairs(t.ts) do
-			n = math.min(n, t.n)
+			assert(t.n == n, 'inputs must have same array dimensions')
 			types[i] = t.t
 		 end
 		 return L.array(L.tuple(types), n)
@@ -112,8 +112,7 @@ function L.zip()
 		 local h = t.ts[1].h
 		 local types = {}
 		 for i,t  in ipairs(t.ts) do
-			w = math.min(w, t.w)
-			h = math.min(h, t.h)
+			assert(t.w == w and t.h == h, 'inputs must have same array dimensions')
 			types[i] = t.t
 		 end
 		 return L.array2d(L.tuple(types), w, h)

@@ -13,8 +13,11 @@ local inspect = require 'inspect'
 
 local P = {}
 
+local _VERBOSE = _VERBOSE or false
+
 local dispatch_mt = {
    __call = function(t, m)
+	  if _VERBOSE then print("translate." .. m.kind) end
 	  assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
 	  return t[m.kind](m)
    end
@@ -26,14 +29,15 @@ setmetatable(translate, dispatch_mt)
 function translate.wrapped(w)
    return translate(L.unwrap(w))
 end
+translate.wrapped = memoize(translate.wrapped)
 
 function translate.array2d(t)
-   return R.array2d(translate.type(t.t), t.w*t.h, 1)
+   return R.array2d(translate(t.t), t.w*t.h, 1)
 end
 translate.array2d = memoize(translate.array2d)
 
 function translate.array(t)
-   return R.array(translate.type(t.t), t.n)
+   return R.array(translate(t.t), t.n)
 end
 translate.array = memoize(translate.array)
 
@@ -42,28 +46,20 @@ function translate.uint(t)
 end
 translate.uint = memoize(translate.uint)
 
-function translate.type(t)
-   return translate(t)
+function translate.tuple(t)
+   local translated = {}
+   for i, typ in ipairs(t.ts) do
+	  translated[i] = translate(typ)
+   end
+   
+   return R.tuple(translated)
 end
-translate.type = memoize(translate.type)
+translate.tuple = memoize(translate.tuple)
 
 function translate.input(i)
-   return R.input(translate.type(i.type))
+   return R.input(translate(i.type))
 end
 translate.input = memoize(translate.input)
-
-function translate.value(v)
-   if T.input:isclassof(v) then
-	  return translate.input(v)
-   elseif T.const:isclassof(v) then
-	  return translate.const(v)
-   elseif T.concat:isclassof(v) then
-	  return translate.concat(v)
-   elseif T.apply:isclassof(v) then
-	  return translate.apply(v)
-   end
-end
-translate.value = memoize(translate.value)
 
 function translate.const(c)
    -- Flatten an n*m table into a 1*(n*m) table
@@ -86,7 +82,7 @@ function translate.const(c)
    end
 
    return R.constant{
-	  type = translate.type(c.type),
+	  type = translate(c.type),
 	  value = flatten_mat(c.v)
    }
 end
@@ -94,7 +90,7 @@ translate.const = memoize(translate.const)
 
 function translate.broadcast(m)
    return C.broadcast(
-	  translate(m.type),
+	  translate(m.type.t),
 	  m.w*m.h
    )
 end
@@ -116,6 +112,22 @@ function translate.add(m)
    }
 end
 translate.add = memoize(translate.add)
+
+function translate.mul(m)
+   return R.modules.mult{
+	  inType = R.uint8,
+	  outType = R.uint8
+   }
+end
+translate.add = memoize(translate.add)
+
+function translate.reduce(m)
+   return R.modules.reduce{
+	  fn = translate(m.m),
+	  size = { m.in_type.w*m.in_type.h, 1 }
+   }
+end
+translate.reduce = memoize(translate.reduce)
 
 function translate.pad(m)
    local t = translate(m.type)
@@ -158,12 +170,7 @@ function translate.pad(m)
 	  output = vec_out
    }
 
-   -- @todo: cast output
-   -- @todo: return lambda
-   
-   -- -- @todo: have the problem of inputs are not handshaked, but we need HS
-   -- -- @todo: maybe fix by handshaking everything? HS removal pass seems to work..
-   -- -- @todo: add in a non-hs pad, then optimize with reduce_rate like with map. this way we progressively handshake each module, which is what we want to really be doing.
+   -- @todo: remove this, only here so I can remember what to do in reduce_rate
    -- local vec_in = R.input(R.HS(translate(L.array2d(m.type.t, w, h))))
 
    -- local stream_in = R.connect{
@@ -267,20 +274,11 @@ function translate.stencil(m)
 end
 translate.stencil = memoize(translate.stencil)
 
-function translate.module(m)
-   if T.add:isclassof(m) then
-	  return translate.add(m)
-   elseif T.map:isclassof(m) then
-	  return translate.map(m)
-   elseif T.lambda:isclassof(m) then
-	  return translate.lambda(m)
-   end
-end
-translate.module = memoize(translate.module)
-
 function translate.apply(a)
    -- propagate output type back to the module
    a.m.type = a.type
+   a.m.out_type = a.type
+   a.m.in_type = a.v.type
 
    return R.connect{
 	  input = translate(a.v),
@@ -304,6 +302,11 @@ function translate.map(m)
    elseif T.array2d:isclassof(m.type) then
 	  size = { m.type.w*m.type.h, 1 }
    end
+
+   -- propagate type to module applied in map
+   m.m.type = m.type.t
+   m.m.out_type = m.out_type.t
+   m.m.in_type = m.in_type.t
    
    return R.modules.map{
 	  fn = translate(m.m),
@@ -311,6 +314,15 @@ function translate.map(m)
    }
 end
 translate.map = memoize(translate.map)
+
+function translate.zip(m)
+   return R.modules.SoAtoAoS{
+	  type = translate(m.out_type.t).list,
+	  size = { m.out_type.w*m.out_type.h, 1 }
+   }
+end
+-- @todo: I think only the values should be memoized.
+-- translate.zip = memoize(translate.zip)
 
 P.translate = translate
 
