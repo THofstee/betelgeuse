@@ -15,6 +15,16 @@ local P = {}
 
 local _VERBOSE = _VERBOSE or false
 
+local function is_handshake(t)
+   if t:isNamed() and t.generator == 'Handshake' then
+	  return true
+   elseif t.kind == 'tuple' and is_handshake(t.list[1]) then
+	  return true
+   end
+   
+   return false
+end
+
 local dispatch_mt = {
    __call = function(t, m)
 	  if _VERBOSE then print("translate." .. m.kind) end
@@ -328,7 +338,7 @@ P.translate = translate
 
 -- wraps a rigel vectorize
 local function vectorize(t, w, h)
-   if t:isNamed() and t.generator == 'Handshake' then
+   if is_handshake(t) then
 	  t = t.params.A
    end
    local input = R.input(R.HS(t))
@@ -353,7 +363,7 @@ P.vectorize = vectorize
 
 -- wraps a rigel devectorize
 local function devectorize(t, w, h)
-   if t:isNamed() and t.generator == 'Handshake' then
+   if is_handshake(t) then
 	  t = t.params.A
    end
    local input = R.input(R.HS(R.array2d(t, w, h)))
@@ -377,7 +387,7 @@ end
 P.devectorize = devectorize
 
 local function change_rate(t, util)
-   if t:isNamed() and t.generator == 'Handshake' then
+   if is_handshake(t) then
    	  t = t.params.A
    end
 
@@ -422,37 +432,73 @@ local function streamify(m)
    	  return m
    end
 
-   local t = m.inputType.over
-   local w = m.inputType.size[1]
-   local h = m.inputType.size[2]
+   local t_in = m.inputType.over
+   local w_in = m.inputType.size[1]
+   local h_in = m.inputType.size[2]
    
-   local stream_in = R.input(R.HS(t))
+   local t_out = m.outputType.over
+   local w_out = m.outputType.size[1]
+   local h_out = m.outputType.size[2]
+   
+   local stream_in = R.input(R.HS(t_in))
 
    local vec_in = R.connect{
 	  input = stream_in,
-	  toModule = vectorize(t, w, h)
+	  toModule = vectorize(t_in, w_in, h_in)
    }
 
-   -- @todo: inline the first level of the module
-   local vec_out = R.connect{
-	  input = vec_in,
-	  toModule = R.HS(m)
-   }
-
+   -- inline the top level of the module
    local vec_out = m.output:visitEach(function(cur, inputs)
-		 if cur.kind == 'input' then
-			return vec_in
+   		 if cur.kind == 'input' then
+   			return vec_in
+   		 elseif cur.kind == 'constant' then
+			-- @todo: this is sort of hacky... convert to HS constseq shift by 0
+			local const = R.connect{
+			   input = nil,
+			   toModule = R.HS(
+				  R.modules.constSeq{
+					 type = R.array2d(cur.type, 1, 1),
+					 P = 1,
+					 value = { cur.value }
+				  }
+			   )
+			}
+
+			-- print(inspect(const, {depth = 4}))
+			-- assert(false)
+
+			return R.connect{
+			   input = const,
+			   toModule = R.HS(
+				  C.cast(
+					 R.array2d(cur.type, 1, 1),
+					 cur.type
+				  )
+			   )
+			}
+   		 end
+
+		 if cur.kind == 'apply' then
+			if inputs[1].type.kind == 'tuple' then
+			   print(inspect(cur, {depth = 2}))
+			   return R.connect{
+				  input = R.fanIn(inputs[1].inputs),
+				  toModule = R.HS(cur.fn)
+			   }
+			else
+			   return R.connect{
+				  input = inputs[1],
+				  toModule = R.HS(cur.fn)
+			   }
+			end
+		 elseif cur.kind == 'concat' then
+			return R.concat(inputs)
 		 end
-		 
-		 return R.connect{
-			input = inputs[1],
-			toModule = R.HS(cur.fn)
-		 }
    end)
    
    local stream_out = R.connect{
 	  input = vec_out,
-	  toModule = devectorize(t, w, h)
+	  toModule = devectorize(t_out, w_out, h_out)
    }
 
    return R.defineModule{
@@ -504,7 +550,7 @@ local function transform(m)
 	  if cur.kind == 'apply' then
 		 if util[2] > 1 then
 			local t = inputs[1].type
-			if t:isNamed() and t.generator == 'Handshake' then
+			if is_handshake(t) then
 			   t = t.params.A
 			end
 			
