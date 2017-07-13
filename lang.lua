@@ -27,6 +27,7 @@ Module = mul
        | zip
        | stencil(number offset_x, number offset_y, number extent_x, number extent_y)
        | pad(number left, number right, number top, number bottom)
+       | crop(number left, number right, number top, number bottom)
 # @todo: try to figure out how to remove broadcast entirely, or at least w/h
        | broadcast(number w, number h) # @todo: what about 1d broadcast?
 # @todo: consider changing multiply etc to use the lift feature and lift systolic
@@ -86,6 +87,16 @@ function L.pad(left, right, top, bottom)
    end
 
    return L_wrap(T.pad(left, right, top, bottom, type_func))
+end
+
+--- Returns a module that will crop the input by a specified amount.
+function L.crop(left, right, top, bottom)
+   local function type_func(t)
+	  assert(t.kind == 'array2d', 'crop requires input type of array2d')
+	  return T.array2d(t.t, t.w-left-right, t.h-top-bottom)
+   end
+
+   return L_wrap(T.crop(left, right, top, bottom, type_func))
 end
 
 --- Returns a module that will zip two inputs together.

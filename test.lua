@@ -56,69 +56,69 @@ local peephole = P.peephole
 -- @todo: add some sort of support for cross-module optimizations
 
 -- local x = L.input(L.uint8())
-local c = L.const(L.uint8(), const_val)
-local add_c = L.lambda(L.add()(L.concat(x, c)), x)
-local r2 = translate(add_c(x))
-local r3 = translate(add_c)
-local r4 = streamify(translate(add_c))
--- R.harness{ fn = R.HS(translate(m)),
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-0translate", outSize = im_size }
+-- local c = L.const(L.uint8(), const_val)
+-- local add_c = L.lambda(L.add()(L.concat(x, c)), x)
+-- local r2 = translate(add_c(x))
+-- local r3 = translate(add_c)
+-- local r4 = streamify(translate(add_c))
+-- -- R.harness{ fn = R.HS(translate(m)),
+-- --            inFile = "box_32_16.raw", inSize = im_size,
+-- --            outFile = "test-0translate", outSize = im_size }
 
-local out = translate(m)
-print("--- After Translate ---")
-out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(out.output)))
-end)
+-- local out = translate(m)
+-- print("--- After Translate ---")
+-- out.output:visitEach(function(cur)
+-- 	  print(get_name(cur))
+-- 	  print(inspect(cur:calcSdfRate(out.output)))
+-- end)
 
 
-local stream_out = streamify(translate(m))
-print("--- After Streamify ---")
-stream_out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out.output)))
-end)
+-- local stream_out = streamify(translate(m))
+-- print("--- After Streamify ---")
+-- stream_out.output:visitEach(function(cur)
+-- 	  print(get_name(cur))
+-- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
+-- end)
 
+-- -- R.harness{ fn = stream_out,
+-- --            inFile = "box_32_16.raw", inSize = im_size,
+-- --            outFile = "test-1streamify", outSize = im_size }
+
+-- local stream_out = transform(stream_out)
+-- print("--- After Transform ---")
+-- stream_out.output:visitEach(function(cur)
+-- 	  print(get_name(cur))
+-- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
+-- end)
+
+-- -- R.harness{ fn = stream_out,
+-- --            inFile = "box_32_16.raw", inSize = im_size,
+-- --            outFile = "test-2transform", outSize = im_size }
+
+-- local stream_out = peephole(stream_out)
+-- print("--- After Peephole ---")
+-- stream_out.output:visitEach(function(cur)
+-- 	  print(get_name(cur))
+-- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
+-- end)
+-- -- R.harness{ fn = stream_out,
+-- --            inFile = "box_32_16.raw", inSize = im_size,
+-- --            outFile = "test-3peephole", outSize = im_size }
+
+-- local stream_out = P.handshakes(stream_out)
+-- print("--- After Handshake Optimization ---")
+-- stream_out.output:visitEach(function(cur)
+-- 	  print(get_name(cur))
+-- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
+-- end)
 -- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-1streamify", outSize = im_size }
-
-local stream_out = transform(stream_out)
-print("--- After Transform ---")
-stream_out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out.output)))
-end)
-
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-2transform", outSize = im_size }
-
-local stream_out = peephole(stream_out)
-print("--- After Peephole ---")
-stream_out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out.output)))
-end)
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-3peephole", outSize = im_size }
-
-local stream_out = P.handshakes(stream_out)
-print("--- After Handshake Optimization ---")
-stream_out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out.output)))
-end)
-R.harness{ fn = stream_out,
-           inFile = "box_32_16.raw", inSize = im_size,
-           outFile = "test", outSize = im_size }
-
-local r_m = translate(m)
--- R.harness{ fn = R.HS(r_m),
 --            inFile = "box_32_16.raw", inSize = im_size,
 --            outFile = "test", outSize = im_size }
+
+-- local r_m = translate(m)
+-- -- R.harness{ fn = R.HS(r_m),
+-- --            inFile = "box_32_16.raw", inSize = im_size,
+-- --            outFile = "test", outSize = im_size }
 
 -- add two image streams
 local im_size = { 1920, 1080 }
@@ -141,9 +141,8 @@ local taps = L.const(L.array2d(L.uint8(), 4, 4), {
 local wt = L.broadcast(pad_size[1], pad_size[2])(taps)
 local st_wt = L.zip_rec()(L.concat(st, wt))
 local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
-local m = conv(st_wt)
-local m2 = L.map(L.reduce(L.add()))(L.map(L.map(L.mul()))(st_wt))
-local mod = L.lambda(m2, I)
+local m = L.crop(8, 8, 2, 1)(conv(st_wt))
+local mod = L.lambda(m, I)
 
 local function rates(m)
    m.output:visitEach(function(cur)
@@ -155,9 +154,14 @@ local res
 res = P.translate(mod)
 print('--- Translate ---')
 rates(res)
-res = P.streamify(res)
-print('--- Streamify ---')
-rates(res)
+print('--- Hack ---')
+res.output:visitEach(function(cur, inputs)
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(res.output)))
+end)
+-- res = P.streamify(res)
+-- print('--- Streamify ---')
+-- rates(res)
 -- res = P.transform(res)
 -- print('--- Transform ---')
 -- rates(res)

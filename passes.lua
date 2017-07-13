@@ -146,7 +146,7 @@ function translate.pad(m)
    local pad_w = m.type.w
    local pad_h = m.type.h
 
-   local vec_in = R.input(translate(L.array2d(m.type.t, w, h)))
+   local vec_in = R.input(R.array2d(arr_t, w*h, 1))
 
    local cast_in = R.connect{
 	  input = vec_in,
@@ -227,6 +227,49 @@ function translate.pad(m)
    -- -- }
 end
 translate.pad = memoize(translate.pad)
+
+function translate.crop(m)
+   local t = translate(m.type)
+   local arr_t = translate(m.type.t)
+   local w = m.type.w+m.left+m.right
+   local h = m.type.h+m.top+m.bottom
+   local crop_w = m.type.w
+   local crop_h = m.type.h
+
+   local vec_in = R.input(R.array2d(arr_t, w*h, 1))
+
+   local cast_in = R.connect{
+	  input = vec_in,
+	  toModule = C.cast(
+		 R.array2d(arr_t, w*h, 1),
+		 R.array2d(arr_t, w, h)
+	  )
+   }
+
+   local cast_out = R.connect{
+	  input = cast_in,
+	  toModule = R.modules.crop{
+		 type = arr_t,
+		 size = { w, h },
+		 crop = { m.left, m.right, m.top, m.bottom },
+		 value = 0
+	  }
+   }
+
+   local vec_out = R.connect{
+	  input = cast_out,
+	  toModule = C.cast(
+		 R.array2d(arr_t, crop_w, crop_h),
+		 R.array2d(arr_t, crop_w*crop_h, 1)
+	  )
+   }
+
+   return R.defineModule{
+	  input = vec_in,
+	  output = vec_out
+   }
+end
+translate.crop = memoize(translate.crop)
 
 function translate.stencil(m)
    local w = m.type.w
@@ -515,6 +558,7 @@ local reduce_rate = {}
 local reduce_rate_mt = {
    __call = function(t, m, util)
 	  if _VERBOSE then print("reduce_rate." .. m.kind) end
+	  if string.find(m.kind, 'lift') then return t.lift(m, util) end
 	  assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
 	  return t[m.kind](m, util)
    end
@@ -563,6 +607,72 @@ function reduce_rate.map(m, util)
    }
 end
 reduce_rate.map = memoize(reduce_rate.map)
+
+function reduce_rate.lift(m, util)
+   local m = R.HS(m)
+   
+   local input = R.input(m.inputType)
+
+   local output = R.connect{
+	  input = input,
+	  toModule = m
+   }
+   
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.lift = memoize(reduce_rate.lift)
+
+function reduce_rate.packTuple(m, util)
+   local input = R.input(m.inputType)
+
+   local output = R.connect{
+	  input = R.fanIn(input),
+	  toModule = reduce_rate(m.fn)
+   }
+   
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.packTuple = memoize(reduce_rate.packTuple)
+
+function reduce_rate.lambda(m, util)
+   local m = R.HS(m)
+   
+   local input = R.input(m.inputType)
+
+   local output = R.connect{
+	  input = input,
+	  toModule = m
+   }
+   
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.lambda = memoize(reduce_rate.lambda)
+
+function reduce_rate.constSeq(m, util)
+   local m = R.HS(m)
+   
+   local input = R.input(m.inputType)
+
+   local output = R.connect{
+	  input = input,
+	  toModule = m
+   }
+   
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.constSeq = memoize(reduce_rate.constSeq)
 
 local function get_name(m)
    if m.kind == 'lambda' then
