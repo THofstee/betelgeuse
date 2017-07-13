@@ -45,11 +45,6 @@ function translate.array2d(t)
 end
 translate.array2d = memoize(translate.array2d)
 
-function translate.array(t)
-   return R.array(translate(t.t), t.n)
-end
-translate.array = memoize(translate.array)
-
 function translate.uint(t)
    return rtypes.uint(t.n)
 end
