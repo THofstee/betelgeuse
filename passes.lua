@@ -348,13 +348,8 @@ end
 translate.lambda = memoize(translate.lambda)
 
 function translate.map(m)
-   local size
-   if T.array:isclassof(m.type) then
-	  size = { m.type.n }
-   elseif T.array2d:isclassof(m.type) then
-	  size = { m.type.w*m.type.h, 1 }
-   end
-
+   local size = { m.type.w*m.type.h, 1 }
+   
    -- propagate type to module applied in map
    m.m.type = m.type.t
    m.m.out_type = m.out_type.t

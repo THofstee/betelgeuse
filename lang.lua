@@ -9,7 +9,6 @@ local T = asdl.NewContext()
 T:Define [[
 Type = uint(number n)
      | tuple(Type* ts)
-     | array(Type t, number n)
      | array2d(Type t, number w, number h)
 
 Value = input(Type t)
@@ -39,7 +38,7 @@ Module = mul
 ]]
 
 local function is_array_type(t)
-   return t.kind == 'array' or t.kind == 'array2d'
+   return t.kind == 'array2d'
 end
 
 local L_mt = {
@@ -104,30 +103,18 @@ end
 function L.zip()
    local function type_func(t)
 	  assert(t.kind == 'tuple', 'zip requires input type to be tuple')
-	  local arr_t = t.ts[1].kind
 	  for _,t in ipairs(t.ts) do
 		 assert(is_array_type(t), 'zip operates over tuple of arrays')
-		 assert(t.kind == arr_t, 'cannot zip ' .. arr_t .. ' with ' .. t.kind)
 	  end
 
-	  if arr_t == 'array' then
-		 local n = t.ts[1].n
-		 local types = {}
-		 for i,t  in ipairs(t.ts) do
-			assert(t.n == n, 'inputs must have same array dimensions')
-			types[i] = t.t
-		 end
-		 return L.array(L.tuple(types), n)
-	  else
-		 local w = t.ts[1].w
-		 local h = t.ts[1].h
-		 local types = {}
-		 for i,t  in ipairs(t.ts) do
-			assert(t.w == w and t.h == h, 'inputs must have same array dimensions')
-			types[i] = t.t
-		 end
-		 return L.array2d(L.tuple(types), w, h)
+	  local w = t.ts[1].w
+	  local h = t.ts[1].h
+	  local types = {}
+	  for i,t  in ipairs(t.ts) do
+		 assert(t.w == w and t.h == h, 'inputs must have same array dimensions')
+		 types[i] = t.t
 	  end
+	  return L.array2d(L.tuple(types), w, h)
    end
 
    return L_wrap(T.zip(type_func))
@@ -199,12 +186,7 @@ function L.map(m)
    
    local function type_func(t)
 	  assert(is_array_type(t), 'map operates on arrays')
-
-	  if t.kind == 'array' then
-		 return L.array(m.type_func(t.t), t.n)
-	  else
-		 return L.array2d(m.type_func(t.t), t.w, t.h)
-	  end
+	  return L.array2d(m.type_func(t.t), t.w, t.h)
    end
 
    return L_wrap(T.map(m, type_func))
@@ -259,7 +241,7 @@ end
 
 --- Creates a 1d array type.
 function L.array(t, n)
-   return T.array(t, n)
+   return T.array2d(t, n, 1)
 end
 
 --- Creates a 2d array type.
