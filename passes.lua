@@ -461,12 +461,11 @@ local function streamify(m)
 					 P = 1,
 					 value = { cur.value }
 				  }
-			   )
+			   ),
+			   util = vec_in.fn.sdfOutput
 			}
 
-			-- print(inspect(const, {depth = 4}))
-			-- assert(false)
-
+			-- @todo: not sure but maybe want to also defineModule here
 			return R.connect{
 			   input = const,
 			   toModule = R.HS(
@@ -480,7 +479,6 @@ local function streamify(m)
 
 		 if cur.kind == 'apply' then
 			if inputs[1].type.kind == 'tuple' then
-			   print(inspect(cur, {depth = 2}))
 			   return R.connect{
 				  input = R.fanIn(inputs[1].inputs),
 				  toModule = R.HS(cur.fn)
@@ -515,14 +513,12 @@ P.reduce_rate = reduce_rate
 local function get_name(m)
    if m.kind == 'lambda' then
 	  return m.kind .. '(' .. get_name(m.output) .. ')'
-	  -- elseif m.kind == 'apply' then
-	  -- 	  return m.kind .. '(' .. get_name(m.fn) .. ',' .. get_name(m.inputs[1]) .. ')'
    elseif m.fn then
 	  return m.kind .. '(' .. get_name(m.fn) .. ')'
    elseif m.kind == 'input' then
 	  return m.kind .. '(' .. tostring(m.type) .. ')'
-   elseif m.makeSystolic then
-	  return m.systolicModule.name
+   elseif m.name then
+	  return m.kind .. '_' .. m.name
    else
 	  return m.kind
    end
