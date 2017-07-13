@@ -25,16 +25,15 @@ local function is_handshake(t)
    return false
 end
 
-local dispatch_mt = {
+local translate = {}
+local translate_mt = {
    __call = function(t, m)
 	  if _VERBOSE then print("translate." .. m.kind) end
 	  assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
 	  return t[m.kind](m)
    end
 }
-
-local translate = {}
-setmetatable(translate, dispatch_mt)
+setmetatable(translate, translate_mt)
 
 function translate.wrapped(w)
    return translate(L.unwrap(w))
@@ -506,9 +505,66 @@ local function streamify(m)
 end
 P.streamify = streamify
 
+local function unwrap_handshake(m)
+   if m.kind == 'makeHandshake' then
+	  return m.fn
+   else
+	  return m
+   end
+end
+
 local reduce_rate = {}
-setmetatable(reduce_rate, dispatch_mt)
-P.reduce_rate = reduce_rate
+local reduce_rate_mt = {
+   __call = function(t, m, util)
+	  if _VERBOSE then print("reduce_rate." .. m.kind) end
+	  assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
+	  return t[m.kind](m, util)
+   end
+}
+setmetatable(reduce_rate, reduce_rate_mt)
+-- reduce_rate = memoize(reduce_rate)
+
+function reduce_rate.makeHandshake(m, util)
+   return reduce_rate(unwrap_handshake(m), util)
+end
+reduce_rate.makeHandshake = memoize(reduce_rate.makeHandshake)
+
+function reduce_rate.map(m, util)
+   local t = m.inputType
+   local w = m.W
+   local h = m.H
+
+   local max_reduce = w*h
+   local parallelism = max_reduce * util[1]/util[2]
+   
+   local input = R.input(R.HS(t))
+   
+   local in_rate = R.connect{
+	  input = input,
+	  toModule = change_rate(t, util)
+   }
+   
+   m = R.modules.map{
+	  fn = m.fn,
+	  size = { parallelism }
+   }
+
+   local inter = R.connect{
+	  input = in_rate,
+	  toModule = R.HS(m)
+   }
+
+   local output = R.connect{
+	  input = inter,
+	  toModule = change_rate(inter.type.params.A, { util[2], util[1] })
+   }
+
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.map = memoize(reduce_rate.map)
 
 local function get_name(m)
    if m.kind == 'lambda' then
@@ -545,52 +601,50 @@ local function transform(m)
 	  local util = get_utilization(cur) or { 0, 0 }
 	  if cur.kind == 'apply' then
 		 if util[2] > 1 then
-			local t = inputs[1].type
-			if is_handshake(t) then
-			   t = t.params.A
-			end
+			-- local t = inputs[1].type
+			-- if is_handshake(t) then
+			--    t = t.params.A
+			-- end
 			
-			local function unwrap_handshake(m)
-			   if m.kind == 'makeHandshake' then
-				  return m.fn
-			   else
-				  return m
-			   end
-			end
+			-- local function reduce_rate(m, util)
+			--    local input = RS.connect{
+			-- 	  input = inputs[1],
+			-- 	  toModule = change_rate(t, util)
+			--    }
 
-			local function reduce_rate(m, util)
-			   local input = RS.connect{
-				  input = inputs[1],
-				  toModule = change_rate(t, util)
-			   }
+			--    m = unwrap_handshake(m)
+			--    local w = m.W
+			--    local h = m.H
+			--    m = m.fn
 
-			   m = unwrap_handshake(m)
-			   local w = m.W
-			   local h = m.H
-			   m = m.fn
-
-			   local max_reduce = w*h
-			   local parallelism = max_reduce * util[1]/util[2]
+			--    local max_reduce = w*h
+			--    local parallelism = max_reduce * util[1]/util[2]
 			   
-			   m = RS.modules.map{
-				  fn = m,
-				  size = { parallelism }
-			   }
+			--    m = RS.modules.map{
+			-- 	  fn = m,
+			-- 	  size = { parallelism }
+			--    }
 
-			   local inter = RS.connect{
-				  input = input,
-				  toModule = RS.HS(m)
-			   }
+			--    local inter = RS.connect{
+			-- 	  input = input,
+			-- 	  toModule = RS.HS(m)
+			--    }
 
-			   local output = RS.connect{
-				  input = inter,
-				  toModule = change_rate(inter.type.params.A, { util[2], util[1] })
-			   }
+			--    local output = RS.connect{
+			-- 	  input = inter,
+			-- 	  toModule = change_rate(inter.type.params.A, { util[2], util[1] })
+			--    }
 
-			   return output
-			end
+			--    return output
+			-- end
 			
-			return reduce_rate(cur.fn, util)
+			-- return reduce_rate(cur.fn, util)
+
+			-- @todo: inline this
+			return RS.connect{
+			   input = inputs[1],
+			   toModule = reduce_rate(cur.fn, util)
+			}
 		 else
 			return RS.connect{
 			   input = inputs[1],
