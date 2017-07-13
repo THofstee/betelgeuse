@@ -474,9 +474,7 @@ local function streamify(m)
 				  )
 			   )
 			}
-   		 end
-
-		 if cur.kind == 'apply' then
+		 elseif cur.kind == 'apply' then
 			if inputs[1].type.kind == 'tuple' then
 			   return R.connect{
 				  input = R.fanIn(inputs[1].inputs),
@@ -600,51 +598,23 @@ local function transform(m)
    local function optimize(cur, inputs)
 	  local util = get_utilization(cur) or { 0, 0 }
 	  if cur.kind == 'apply' then
-		 if util[2] > 1 then
-			-- local t = inputs[1].type
-			-- if is_handshake(t) then
-			--    t = t.params.A
-			-- end
-			
-			-- local function reduce_rate(m, util)
-			--    local input = RS.connect{
-			-- 	  input = inputs[1],
-			-- 	  toModule = change_rate(t, util)
-			--    }
+		 if util[2] > util[1] then			
+			local module_in = inputs[1]
+			local m = reduce_rate(cur.fn, util)
 
-			--    m = unwrap_handshake(m)
-			--    local w = m.W
-			--    local h = m.H
-			--    m = m.fn
-
-			--    local max_reduce = w*h
-			--    local parallelism = max_reduce * util[1]/util[2]
-			   
-			--    m = RS.modules.map{
-			-- 	  fn = m,
-			-- 	  size = { parallelism }
-			--    }
-
-			--    local inter = RS.connect{
-			-- 	  input = input,
-			-- 	  toModule = RS.HS(m)
-			--    }
-
-			--    local output = RS.connect{
-			-- 	  input = inter,
-			-- 	  toModule = change_rate(inter.type.params.A, { util[2], util[1] })
-			--    }
-
-			--    return output
-			-- end
-			
-			-- return reduce_rate(cur.fn, util)
-
-			-- @todo: inline this
-			return RS.connect{
-			   input = inputs[1],
-			   toModule = reduce_rate(cur.fn, util)
-			}
+			-- inline the reduced rate module
+			return m.output:visitEach(function(cur, inputs)
+				  if cur.kind == 'input' then
+					 return module_in
+				  elseif cur.kind == 'apply' then
+					 return RS.connect{
+						input = inputs[1],
+						toModule = cur.fn
+					 }					 
+				  elseif cur.kind == 'concat' then
+					 return RS.concat(inputs)
+				  end
+			end)			
 		 else
 			return RS.connect{
 			   input = inputs[1],
