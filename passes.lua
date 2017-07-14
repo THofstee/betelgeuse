@@ -41,7 +41,7 @@ end
 translate.wrapped = memoize(translate.wrapped)
 
 function translate.array2d(t)
-   return R.array2d(translate(t.t), t.w*t.h, 1)
+   return R.array2d(translate(t.t), t.w, t.h)
 end
 translate.array2d = memoize(translate.array2d)
 
@@ -95,7 +95,7 @@ translate.const = memoize(translate.const)
 function translate.broadcast(m)
    return C.broadcast(
 	  translate(m.type.t),
-	  m.w*m.h
+	  { m.w, m.h }
    )
 end
 translate.broadcast = memoize(translate.broadcast)
@@ -128,50 +128,23 @@ translate.add = memoize(translate.add)
 function translate.reduce(m)
    return R.modules.reduce{
 	  fn = translate(m.m),
-	  size = { m.in_type.w*m.in_type.h, 1 }
+	  size = { m.in_type.w, m.in_type.h }
    }
 end
 translate.reduce = memoize(translate.reduce)
 
 function translate.pad(m)
-   local t = translate(m.type)
    local arr_t = translate(m.type.t)
    local w = m.type.w-m.left-m.right
    local h = m.type.h-m.top-m.bottom
    local pad_w = m.type.w
    local pad_h = m.type.h
 
-   local vec_in = R.input(R.array2d(arr_t, w*h, 1))
-
-   local cast_in = R.connect{
-	  input = vec_in,
-	  toModule = C.cast(
-		 R.array2d(arr_t, w*h, 1),
-		 R.array2d(arr_t, w, h)
-	  )
-   }
-
-   local cast_out = R.connect{
-	  input = cast_in,
-	  toModule = R.modules.pad{
+   return R.modules.pad{
 		 type = arr_t,
 		 size = { w, h },
 		 pad = { m.left, m.right, m.top, m.bottom },
 		 value = 0
-	  }
-   }
-
-   local vec_out = R.connect{
-	  input = cast_out,
-	  toModule = C.cast(
-		 R.array2d(arr_t, pad_w, pad_h),
-		 R.array2d(arr_t, pad_w*pad_h, 1)
-	  )
-   }
-
-   return R.defineModule{
-	  input = vec_in,
-	  output = vec_out
    }
 
    -- @todo: remove this, only here so I can remember what to do in reduce_rate
@@ -224,45 +197,18 @@ end
 translate.pad = memoize(translate.pad)
 
 function translate.crop(m)
-   local t = translate(m.type)
    local arr_t = translate(m.type.t)
    local w = m.type.w+m.left+m.right
    local h = m.type.h+m.top+m.bottom
    local crop_w = m.type.w
    local crop_h = m.type.h
 
-   local vec_in = R.input(R.array2d(arr_t, w*h, 1))
-
-   local cast_in = R.connect{
-	  input = vec_in,
-	  toModule = C.cast(
-		 R.array2d(arr_t, w*h, 1),
-		 R.array2d(arr_t, w, h)
-	  )
-   }
-
-   local cast_out = R.connect{
-	  input = cast_in,
-	  toModule = R.modules.crop{
+   return R.modules.crop{
 		 type = arr_t,
 		 size = { w, h },
 		 crop = { m.left, m.right, m.top, m.bottom },
 		 value = 0
 	  }
-   }
-
-   local vec_out = R.connect{
-	  input = cast_out,
-	  toModule = C.cast(
-		 R.array2d(arr_t, crop_w, crop_h),
-		 R.array2d(arr_t, crop_w*crop_h, 1)
-	  )
-   }
-
-   return R.defineModule{
-	  input = vec_in,
-	  output = vec_out
-   }
 end
 translate.crop = memoize(translate.crop)
 
@@ -270,22 +216,8 @@ function translate.stencil(m)
    local w = m.type.w
    local h = m.type.h
    local in_elem_t = translate(m.type.t.t)
-   local inter_elem_t = R.array2d(in_elem_t, m.type.t.w, m.type.t.h)
-   local out_elem_t = translate(m.type.t)
 
-   local vec_in = R.input(R.array2d(in_elem_t, w*h, 1))
-
-   local cast_in = R.connect{
-	  input = vec_in,
-	  toModule = C.cast(
-		 R.array2d(in_elem_t, w*h, 1),
-		 R.array2d(in_elem_t, w, h)
-	  )
-   }
-
-   local cast_out = R.connect{
-	  input = cast_in,
-	  toModule = C.stencil(
+   return  C.stencil(
 		 in_elem_t,
 		 w,
 		 h,
@@ -294,30 +226,6 @@ function translate.stencil(m)
 		 m.offset_y,
 		 m.extent_y+m.offset_y-1
 	  )
-   }
-
-   -- cast inner type
-   local vec_out = R.connect{
-	  input = cast_out,
-	  toModule = C.cast(
-		 R.array2d(inter_elem_t, w, h),
-		 R.array2d(out_elem_t, w, h)
-	  )
-   }
-
-   -- cast outer type
-   local vec2_out = R.connect{
-	  input = vec_out,
-	  toModule = C.cast(
-		 R.array2d(out_elem_t, w, h),
-		 R.array2d(out_elem_t, w*h, 1)
-	  )
-   }
-
-   return R.defineModule{
-	  input = vec_in,
-	  output = vec2_out
-   }
 end
 translate.stencil = memoize(translate.stencil)
 
@@ -343,7 +251,7 @@ end
 translate.lambda = memoize(translate.lambda)
 
 function translate.map(m)
-   local size = { m.type.w*m.type.h, 1 }
+   local size = { m.type.w, m.type.h }
    
    -- propagate type to module applied in map
    m.m.type = m.type.t
@@ -360,7 +268,7 @@ translate.map = memoize(translate.map)
 function translate.zip(m)
    return R.modules.SoAtoAoS{
 	  type = translate(m.out_type.t).list,
-	  size = { m.out_type.w*m.out_type.h, 1 }
+	  size = { m.out_type.w, m.out_type.h }
    }
 end
 -- @todo: I think only the values should be memoized.
@@ -386,9 +294,19 @@ local function vectorize(t, w, h)
 	  )
    }
 
+   local output = R.connect{
+	  input = vec,
+	  toModule = R.HS(
+		 C.cast(
+			R.array2d(t, w*h, 1),
+			R.array2d(t, w, h)
+		 )
+	  )
+   }
+
    return R.defineModule{
 	  input = input,
-	  output = vec
+	  output = output
    }
 end
 P.vectorize = vectorize
@@ -400,8 +318,18 @@ local function devectorize(t, w, h)
    end
    local input = R.input(R.HS(R.array2d(t, w, h)))
 
-   local output = R.connect{
+   local in_cast = R.connect{
 	  input = input,
+	  toModule = R.HS(
+		 C.cast(
+			R.array2d(t, w, h),
+			R.array2d(t, w*h, 1)
+		 )
+	  )
+   }
+
+   local output = R.connect{
+	  input = in_cast,
 	  toModule = R.HS(
 		 R.modules.devectorize{
 			type = t,
@@ -418,7 +346,8 @@ local function devectorize(t, w, h)
 end
 P.devectorize = devectorize
 
-local function change_rate(t, util)
+local function change_rate(input, out_t)
+   local t = input.type
    if is_handshake(t) then
    	  t = t.params.A
    end
@@ -434,26 +363,43 @@ local function change_rate(t, util)
 	  h = 1
    end
 
-   local input = R.input(R.HS(R.array2d(arr_t, w, h)))
+   local in_cast = R.connect{
+	  input = input,
+	  toModule = R.HS(
+		 C.cast(
+			R.array2d(arr_t, w, h),
+			R.array2d(arr_t, w*h, 1)
+		 )
+	  )
+   }
+
+   local w_out = out_t[1]
+   local h_out = out_t[2]
 
    local rate = R.connect{
-   	  input = input,
+   	  input = in_cast,
    	  toModule = R.HS(
    		 R.modules.changeRate{
    			type = arr_t,
    			H = 1,
    			inW = w*h,
-   			outW = w*h * util[1]/util[2]
+   			outW = w_out*h_out
    		 }
    	  )
    }
 
-   return R.defineModule{
-	  input = input,
-	  output = rate
+   local output = R.connect{
+	  input = rate,
+	  toModule = R.HS(
+		 C.cast(
+			R.array2d(arr_t, w_out*h_out, 1),
+			R.array2d(arr_t, w_out, h_out)
+		 )
+	  )
    }
+
+   return output
 end
-P.change_rate = change_rate
 
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
@@ -497,7 +443,6 @@ local function streamify(m)
 			   util = vec_in.fn.sdfOutput
 			}
 
-			-- @todo: not sure but maybe want to also defineModule here
 			return R.connect{
 			   input = const,
 			   toModule = R.HS(
@@ -571,10 +516,7 @@ function reduce_rate.map(m, util)
    
    local input = R.input(R.HS(t))
    
-   local in_rate = R.connect{
-	  input = input,
-	  toModule = change_rate(t, util)
-   }
+   local in_rate = change_rate(input, { parallelism, 1 })
    
    m = R.modules.map{
 	  fn = m.fn,
@@ -586,10 +528,7 @@ function reduce_rate.map(m, util)
 	  toModule = R.HS(m)
    }
 
-   local output = R.connect{
-	  input = inter,
-	  toModule = change_rate(inter.type.params.A, { util[2], util[1] })
-   }
+   local output = change_rate(inter, { w, h })
 
    return R.defineModule{
 	  input = input,
@@ -754,6 +693,27 @@ local function peephole(m)
    local RS = require 'rigelSimple'
    local R = require 'rigel'
 
+   local function fuse_cast(cur, inputs)
+	  if cur.kind == 'apply' then
+		 if string.find(base(cur).kind, 'cast') then
+			if #inputs == 1 and string.find(base(inputs[1]).kind, 'cast') then
+			   local temp_input = base(inputs[1])
+			   local temp_cur = base(cur)
+
+			   -- @todo: remove the casts here
+			   return cur
+			end
+		 end
+
+		 return RS.connect{
+			input = inputs[1],
+			toModule = cur.fn
+		 }
+	  end
+
+	  return cur
+   end
+
    local function fuse_changeRate(cur, inputs)
 	  if cur.kind == 'apply' then
 		 if base(cur).kind == 'changeRate' then
@@ -764,12 +724,10 @@ local function peephole(m)
 			   if(temp_cur.inputRate == temp_input.outputRate) then
 				  local input = inputs[1].inputs[1]
 				  local t = input.type
-				  local util = { temp_input.inputRate, temp_cur.outputRate }
+				  -- @todo: not sure if these are actually the right fields.
+				  local size = { temp_cur.output.type.w, temp_cur.output.type.h }
 
-				  return RS.connect{
-					 input = input,
-					 toModule = change_rate(t, util)
-				  }
+				  return change_rate(input, size)
 			   end
 			end
 		 end
@@ -800,21 +758,26 @@ local function peephole(m)
 
 	  return cur
    end
-   
+
+   local output
    if m.kind == 'lambda' then
-	  local output = m.output:visitEach(fuse_changeRate)
-	  output = output:visitEach(removal)
-	  return RS.defineModule{
+	  output = m.output
+   else
+	  output = m
+   end
+
+   output = output:visitEach(fuse_cast)
+   output = output:visitEach(fuse_changeRate)
+   output = output:visitEach(removal)
+
+   if m.kind == 'lambda' then
+	  	  return RS.defineModule{
 		 input = m.input,
 		 output = output
 	  }
    else
-	  local output = m:visitEach(fuse_changeRate)
-	  output = output:visitEach(removal)
 	  return output
    end
-   
-   return 
 end
 P.peephole = peephole
 
@@ -857,7 +820,7 @@ local function handshakes(m)
 				  toModule = cur.fn.fn
 			   }
 			end
-			
+
 			return RS.connect{
 			   input = inputs[1],
 			   toModule = cur.fn
