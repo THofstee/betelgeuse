@@ -134,14 +134,9 @@ function L.zip_rec()
 			types[i] = t
 		 end
 		 
-		 local function all_array_t()
-			if not is_array_type(types[1]) then
-			   return false
-			end
-			
-			local arr_t = types[1].kind			
+		 local function all_array_t()		
 			for _,t in ipairs(types) do
-			   if not t.kind == arr_t then
+			   if not is_array_type(t) then
 				  return false
 			   end
 			end
