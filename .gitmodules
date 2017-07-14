@@ -1,0 +1,4 @@
+[submodule "rigel"]
+	path = rigel
+	url = https://github.com/jameshegarty/rigel.git
+	branch = master

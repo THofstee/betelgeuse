@@ -1,6 +1,6 @@
 --- A set of compilation passes to lower to and optimize Rigel.
 -- @module passes
-package.path = "/home/hofstee/rigel/?.lua;/home/hofstee/rigel/src/?.lua;/home/hofstee/rigel/examples/?.lua;" .. package.path
+package.path = "./rigel/?.lua;./rigel/src/?.lua;./rigel/examples/?.lua;" .. package.path
 local R = require 'rigelSimple'
 local C = require 'examplescommon'
 local rtypes = require 'types'

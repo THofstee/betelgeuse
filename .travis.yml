@@ -18,6 +18,7 @@ before_install:
   - luarocks install luacov-coveralls
   - luarocks install busted
   - luarocks install luafilesystem
+  - git submodule update --init
 
 install:
 
