@@ -146,53 +146,6 @@ function translate.pad(m)
 		 pad = { m.left, m.right, m.top, m.bottom },
 		 value = 0
    }
-
-   -- @todo: remove this, only here so I can remember what to do in reduce_rate
-   -- local vec_in = R.input(R.HS(translate(L.array2d(m.type.t, w, h))))
-
-   -- local stream_in = R.connect{
-   -- 	  input = vec_in,
-   -- 	  toModule = R.HS(R.modules.devectorize{
-   -- 						 type = arr_t,
-   -- 						 H = 1,
-   -- 						 V = w*h
-   -- 										   }
-   -- 	  )
-   -- }
-
-   -- local stream_out = R.connect{
-   -- 	  input = stream_in,
-   -- 	  toModule = R.HS(R.modules.padSeq{
-   -- 						 type = translate(m.type.t),
-   -- 						 V = 1,
-   -- 						 size = { w, h },
-   -- 						 pad = { -m.offset_x, m.extent_x+m.offset_x-1, -m.offset_y, m.extent_y+m.offset_y-1 },
-   -- 						 value = 0
-   -- 	  })
-   -- }
-
-   -- local vec_out = R.connect{
-   -- 	  input = stream_out,
-   -- 	  toModule = R.HS(R.modules.vectorize{
-   -- 						 type = arr_t,
-   -- 						 H = 1,
-   -- 						 V = pad_w*pad_h
-   -- 										 }
-   -- 	  )
-   -- }
-
-   -- return R.defineModule{
-   -- 	  input = vec_in,
-   -- 	  output = vec_out
-   -- }
-
-   -- -- return R.modules.padSeq{
-   -- -- 	  type = translate(m.type.t),
-   -- -- 	  V = 1,
-   -- -- 	  size = { m.type.w-m.extent_x, m.type.h-m.extent_y },
-   -- -- 	  pad = { -m.offset_x, m.extent_x+m.offset_x-1, -m.offset_y, m.extent_y+m.offset_y-1 },
-   -- -- 	  value = 0
-   -- -- }
 end
 translate.pad = memoize(translate.pad)
 
@@ -400,6 +353,7 @@ local function change_rate(input, out_t)
 
    return output
 end
+P.change_rate = change_rate
 
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
@@ -538,6 +492,7 @@ end
 reduce_rate.map = memoize(reduce_rate.map)
 
 function reduce_rate.lift(m, util)
+   -- @todo: not sure if there's much to do here, think about it
    local m = R.HS(m)
    
    local input = R.input(m.inputType)
@@ -554,12 +509,50 @@ function reduce_rate.lift(m, util)
 end
 reduce_rate.lift = memoize(reduce_rate.lift)
 
-function reduce_rate.packTuple(m, util)
+function reduce_rate.pad(m, util)
+   local t = m.inputType
+   local w = m.width
+   local h = m.height
+   local out_size = m.outputType.size
+
+   local max_reduce = w*h
+   local parallelism = max_reduce * util[1]/util[2]
+   
+   local input = R.input(R.HS(t))
+   
+   local in_rate = change_rate(input, { parallelism, 1 })
+   
+   m = R.modules.padSeq{
+	  type = m.type,
+	  V = parallelism,
+	  size = { w, h },
+	  pad = { m.L, m.R, m.Top, m.B },
+	  value = m.value
+   }
+
+   local inter = R.connect{
+	  input = in_rate,
+	  toModule = R.HS(m)
+   }
+
+   local output = change_rate(inter, out_size)
+
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.pad = memoize(reduce_rate.pad)
+
+function reduce_rate.stencil(m, util)
+   -- @todo: implement
+   local m = R.HS(m)
+   
    local input = R.input(m.inputType)
 
    local output = R.connect{
-	  input = R.fanIn(input),
-	  toModule = reduce_rate(m.fn)
+	  input = input,
+	  toModule = m
    }
    
    return R.defineModule{
@@ -567,9 +560,16 @@ function reduce_rate.packTuple(m, util)
 	  output = output
    }
 end
+reduce_rate.stencil = memoize(reduce_rate.stencil)
+
+function reduce_rate.packTuple(m, util)
+   -- @todo: figure out how to return this as a lambda
+   return m
+end
 reduce_rate.packTuple = memoize(reduce_rate.packTuple)
 
 function reduce_rate.lambda(m, util)
+   -- @todo: recurse optimization calls here?
    local m = R.HS(m)
    
    local input = R.input(m.inputType)
@@ -587,6 +587,7 @@ end
 reduce_rate.lambda = memoize(reduce_rate.lambda)
 
 function reduce_rate.constSeq(m, util)
+   -- @todo: implement
    local m = R.HS(m)
    
    local input = R.input(m.inputType)
@@ -637,23 +638,32 @@ local function transform(m)
    local function optimize(cur, inputs)
 	  local util = get_utilization(cur) or { 0, 0 }
 	  if cur.kind == 'apply' then
-		 if util[2] > util[1] then			
+		 if util[2] > util[1] then
+			print(cur.fn.name)
 			local module_in = inputs[1]
 			local m = reduce_rate(cur.fn, util)
 
-			-- inline the reduced rate module
-			return m.output:visitEach(function(cur, inputs)
-				  if cur.kind == 'input' then
-					 return module_in
-				  elseif cur.kind == 'apply' then
-					 return RS.connect{
-						input = inputs[1],
-						toModule = cur.fn
-					 }					 
-				  elseif cur.kind == 'concat' then
-					 return RS.concat(inputs)
-				  end
-			end)			
+			-- @todo: this is a hack because some modules are hard to return as lambda. should either make everything consistent and return just lambda, or don't memoize the reduce_rate functions and pass in inputs to them instead and have them return the connected output
+			if m.kind == 'lambda' then
+			   -- inline the reduced rate module
+			   return m.output:visitEach(function(cur, inputs)
+					 if cur.kind == 'input' then
+						return module_in
+					 elseif cur.kind == 'apply' then
+						return RS.connect{
+						   input = inputs[1],
+						   toModule = cur.fn
+						}					 
+					 elseif cur.kind == 'concat' then
+						return RS.concat(inputs)
+					 end
+			   end)
+			else
+			   return RS.connect{
+				  input = inputs[1],
+				  toModule = m
+			   }
+			end
 		 else
 			return RS.connect{
 			   input = inputs[1],
@@ -661,7 +671,7 @@ local function transform(m)
 			}
 		 end
 	  end
-	  
+
 	  return cur
    end
 
@@ -771,7 +781,7 @@ local function peephole(m)
    output = output:visitEach(removal)
 
    if m.kind == 'lambda' then
-	  	  return RS.defineModule{
+	  return RS.defineModule{
 		 input = m.input,
 		 output = output
 	  }
@@ -787,6 +797,15 @@ local function get_input(m)
    end
    return m
 end
+P.get_input = get_input
+
+local function rates(m)
+   m.output:visitEach(function(cur)
+		 print(P.get_name(cur))
+		 print(inspect(cur:calcSdfRate(m.output)))
+   end)
+end
+P.rates = rates
 
 local function needs_hs(m)
    local modules = {
@@ -797,6 +816,7 @@ local function needs_hs(m)
 end
 
 local function handshakes(m)
+   -- @todo: this function shouldn't crash if it can't remove HS, it should just return the original pipeline. need to add another case in cur.kind i think
    local RS = require 'rigelSimple'
    local R = require 'rigel'
 

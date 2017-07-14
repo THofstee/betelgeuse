@@ -17,31 +17,6 @@ local c = L.const(L.uint8(), 1)
 local bc = L.broadcast(im_size[1], im_size[2])(c)
 local m = L.map(L.add())(L.zip_rec()(L.concat(I, bc)))
 
--- add constant to image (lambda)
-local im_size = { 32, 16 }
-local const_val = 30
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local x = L.input(L.uint8())
-local c = L.const(L.uint8(), const_val)
-local add_c = L.lambda(L.add()(L.concat(x, c)), x)
-local m_add = L.map(add_c)
-
--- could sort of metaprogram the thing like this, and postpone generation of the module until later
--- you could create a different function that would take in something like a filename and then generate these properties in the function and pass it in to the module generation
-local function create_module(size)
-   local const_val = 30
-   local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-   local x = L.input(L.uint8())
-   local c = L.const(L.uint8(), const_val)
-   local add_c = L.lambda(L.add()(L.concat(x, c)), x)
-   local m_add = L.map(add_c)
-   -- return L.lambda(m_add(I), I)
-   return L.lambda(L.chain(m_add, m_add)(I), I)
-end
-local m = create_module(im_size)
-
--- write_file('box_out.raw', m(read_file('box_32_16.raw')))
-
 local R = require 'rigelSimple'
 
 local streamify = P.streamify
@@ -54,71 +29,6 @@ local peephole = P.peephole
 -- @todo: add something like an extra class that when called will lower the module into rigel and give you back something
 -- @todo: remove the rigel harness calls, or make a nicer way to do that
 -- @todo: add some sort of support for cross-module optimizations
-
-local x = L.input(L.uint8())
-local c = L.const(L.uint8(), const_val)
-local add_c = L.lambda(L.add()(L.concat(x, c)), x)
-local r2 = translate(add_c(x))
-local r3 = translate(add_c)
-local r4 = streamify(translate(add_c))
--- R.harness{ fn = R.HS(translate(m)),
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-0translate", outSize = im_size }
-
-local out = translate(m)
-print("--- After Translate ---")
-out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(out.output)))
-end)
-
-
-local stream_out = streamify(translate(m))
-print("--- After Streamify ---")
-stream_out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out.output)))
-end)
-
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-1streamify", outSize = im_size }
-
-local stream_out = transform(stream_out)
-print("--- After Transform ---")
-stream_out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out.output)))
-end)
-
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-2transform", outSize = im_size }
-
-local stream_out = peephole(stream_out)
-print("--- After Peephole ---")
-stream_out.output:visitEach(function(cur)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(stream_out.output)))
-end)
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-3peephole", outSize = im_size }
-
--- local stream_out = P.handshakes(stream_out)
--- print("--- After Handshake Optimization ---")
--- stream_out.output:visitEach(function(cur)
--- 	  print(get_name(cur))
--- 	  print(inspect(cur:calcSdfRate(stream_out.output)))
--- end)
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test", outSize = im_size }
-
-local r_m = translate(m)
--- R.harness{ fn = R.HS(r_m),
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test", outSize = im_size }
 
 -- add two image streams
 local im_size = { 1920, 1080 }
@@ -144,53 +54,22 @@ local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
 local m = L.crop(8, 8, 2, 1)(conv(st_wt))
 local mod = L.lambda(m, I)
 
-local function rates(m)
-   m.output:visitEach(function(cur)
-   	  print(get_name(cur))
-   	  print(inspect(cur:calcSdfRate(m.output)))
-   end)
-end
 local res
 res = P.translate(mod)
 print('--- Translate ---')
-rates(res)
-print('--- Hack ---')
-res.output:visitEach(function(cur, inputs)
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(res.output)))
-end)
--- res = P.streamify(res)
--- print('--- Streamify ---')
--- rates(res)
--- res = P.transform(res)
--- print('--- Transform ---')
--- rates(res)
+P.rates(res)
+res = P.streamify(res)
+print('--- Streamify ---')
+P.rates(res)
+res = P.transform(res)
+print('--- Transform ---')
+P.rates(res)
 -- res = P.peephole(res)
 -- print('--- Peephole ---')
--- rates(res)
+-- P.rates(res)
 -- res = P.handshakes(res)
 -- print('--- Handshake ---')
--- rates(res)
-
-
--- local a = L.input(L.array2d(L.array2d(L.uint8(), 3, 3), 5, 5))
--- local b = L.input(L.array2d(L.array2d(L.uint8(), 3, 3), 5, 5))
--- local c = L.input(L.array2d(L.tuple(L.array2d(L.uint8(), 3, 3), L.array2d(L.uint8(), 3, 3)), 5, 5))
--- local ab = L.zip_rec()(L.concat(a, b))
-
--- -- print(ab.type)
--- -- print(ab.v.type)
--- -- print(ab.v.v.type)
--- -- local ab_t = translate(L.zip()(L.concat(a, b)))
--- -- local c_t = translate(L.map(L.zip())(c))
--- local ab1 = L.map(L.zip())(L.zip()(L.concat(a, b)))
--- local ab2 = L.zip_rec()(L.concat(a, b))
--- -- print(ab1)
--- -- print(ab2)
--- -- local ab_t = translate(ab1)
--- local ab_t = translate(ab2)
--- -- print(inspect(c_t, {depth = 2}))
--- -- print(inspect(ab_t, {depth = 2}))
+-- P.rates(res)
 
 -- @todo: lucas-kanade
 -- @todo: histogram
