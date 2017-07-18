@@ -229,7 +229,7 @@ end
 
 P.translate = translate
 
-local function change_rate(input, out_t)
+local function change_rate(input, out_size)
    local t = input.type
    if is_handshake(t) then
    	  t = t.params.A
@@ -256,8 +256,8 @@ local function change_rate(input, out_t)
 	  )
    }
 
-   local w_out = out_t[1]
-   local h_out = out_t[2]
+   local w_out = out_size[1]
+   local h_out = out_size[2]
 
    local rate = R.connect{
    	  input = in_cast,
