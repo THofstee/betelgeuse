@@ -466,12 +466,14 @@ function reduce_rate.map(m, util)
    local h = m.H
 
    local max_reduce = w*h
-   local parallelism = max_reduce * util[1]/util[2]
+   -- @todo: should this be floor or ceil?
+   local parallelism = math.floor(max_reduce * util[1]/util[2])
    
    local input = R.input(R.HS(t))
    
    local in_rate = change_rate(input, { parallelism, 1 })
-   
+
+   -- @todo: the module being mapped over probably also needs to be optimized, for example recursive maps
    m = R.modules.map{
 	  fn = m.fn,
 	  size = { parallelism }
@@ -493,6 +495,19 @@ reduce_rate.map = memoize(reduce_rate.map)
 
 function reduce_rate.SoAtoAoS(m, util)
    -- @todo: implement
+   local t = m.inputType
+
+   local input = R.input(R.HS(t))
+
+   local output = R.connect{
+	  input = input,
+	  toModule = R.HS(m)
+   }
+   
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
 end
 reduce_rate.SoAtoAoS = memoize(reduce_rate.SoAtoAoS)
 
@@ -548,6 +563,42 @@ function reduce_rate.pad(m, util)
    }
 end
 reduce_rate.pad = memoize(reduce_rate.pad)
+
+function reduce_rate.crop(m, util)
+   -- @todo: double check implementation
+   local t = m.inputType
+   local w = m.width
+   local h = m.height
+   local out_size = m.outputType.size
+
+   local max_reduce = w*h
+   -- @todo: floor or ceil?
+   local parallelism = math.floor(max_reduce * util[1]/util[2])
+   
+   local input = R.input(R.HS(t))
+   
+   local in_rate = change_rate(input, { parallelism, 1 })
+   
+   m = R.modules.cropSeq{
+	  type = m.type,
+	  V = parallelism,
+	  size = { w, h },
+	  crop = { m.L, m.R, m.Top, m.B }
+   }
+
+   local inter = R.connect{
+	  input = in_rate,
+	  toModule = R.HS(m)
+   }
+
+   local output = change_rate(inter, out_size)
+
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.crop = memoize(reduce_rate.crop)
 
 function reduce_rate.stencil(m, util)
    -- @todo: implement
@@ -660,7 +711,6 @@ local function transform(m)
 	  local util = get_utilization(cur) or { 0, 0 }
 	  if cur.kind == 'apply' then
 		 if util[2] > util[1] then
-			print(cur.fn.name)
 			local module_in = inputs[1]
 			local m = reduce_rate(cur.fn, util)
 
@@ -812,9 +862,26 @@ local function get_input(m)
 end
 P.get_input = get_input
 
+local function get_type_signature(cur)
+   if cur.kind == 'input' or cur.kind == 'constant' then
+	  return 'nil' .. ' -> ' .. tostring(cur.type)
+   elseif cur.kind == 'concat' then
+	  local input = '{'
+	  for i,t in ipairs(cur.inputs) do
+		 input = input .. tostring(t.type) .. ', '
+	  end
+	  input = string.sub(input, 1, -3) .. '}'
+	  return input .. ' -> ' .. tostring(cur.type)
+   else
+	  return tostring(cur.fn.inputType) .. ' -> ' .. tostring(cur.fn.outputType)
+   end
+end
+P.get_type_signature = get_type_signature
+
 local function rates(m)
    m.output:visitEach(function(cur)
 		 print(P.get_name(cur))
+		 print(':: ' .. P.get_type_signature(cur))
 		 print(inspect(cur:calcSdfRate(m.output)))
    end)
 end
