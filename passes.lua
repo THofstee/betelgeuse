@@ -229,76 +229,6 @@ end
 
 P.translate = translate
 
--- wraps a rigel vectorize
-local function vectorize(t, w, h)
-   if is_handshake(t) then
-	  t = t.params.A
-   end
-   local input = R.input(R.HS(t))
-   
-   local vec = R.connect{
-	  input = input,
-	  toModule = R.HS(
-		 R.modules.vectorize{
-			type = t,
-			H = 1,
-			V = w*h
-		 }
-	  )
-   }
-
-   local output = R.connect{
-	  input = vec,
-	  toModule = R.HS(
-		 C.cast(
-			R.array2d(t, w*h, 1),
-			R.array2d(t, w, h)
-		 )
-	  )
-   }
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
-end
-P.vectorize = vectorize
-
--- wraps a rigel devectorize
-local function devectorize(t, w, h)
-   if is_handshake(t) then
-	  t = t.params.A
-   end
-   local input = R.input(R.HS(R.array2d(t, w, h)))
-
-   local in_cast = R.connect{
-	  input = input,
-	  toModule = R.HS(
-		 C.cast(
-			R.array2d(t, w, h),
-			R.array2d(t, w*h, 1)
-		 )
-	  )
-   }
-
-   local output = R.connect{
-	  input = in_cast,
-	  toModule = R.HS(
-		 R.modules.devectorize{
-			type = t,
-			H = 1,
-			V = w*h,
-		 }
-	  )
-   }
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
-end
-P.devectorize = devectorize
-
 local function change_rate(input, out_t)
    local t = input.type
    if is_handshake(t) then
@@ -355,6 +285,38 @@ local function change_rate(input, out_t)
 end
 P.change_rate = change_rate
 
+-- wraps a rigel vectorize
+local function vectorize(t, w, h)
+   if is_handshake(t) then
+	  t = t.params.A
+   end
+   local input = R.input(R.HS(t))
+   
+   local output = change_rate(input, { w, h })
+
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+P.vectorize = vectorize
+
+-- wraps a rigel devectorize
+local function devectorize(t, w, h)
+   if is_handshake(t) then
+	  t = t.params.A
+   end
+   local input = R.input(R.HS(R.array2d(t, w, h)))
+
+   local output = change_rate(input, { 1, 1 })
+
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+P.devectorize = devectorize
+
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
@@ -374,10 +336,7 @@ local function streamify(m)
    
    local stream_in = R.input(R.HS(t_in))
 
-   local vec_in = R.connect{
-	  input = stream_in,
-	  toModule = vectorize(t_in, w_in, h_in)
-   }
+   local vec_in = change_rate(stream_in, { w_in, h_in })
 
    -- inline the top level of the module
    local vec_out = m.output:visitEach(function(cur, inputs)
@@ -397,6 +356,9 @@ local function streamify(m)
 			   util = vec_in.fn.sdfOutput
 			}
 
+			-- @todo: hack, remove by fixing sdf solve in rigel
+			const.fn.fn.util = vec_in.fn.sdfOutput
+			
 			return R.connect{
 			   input = const,
 			   toModule = R.HS(
@@ -423,10 +385,7 @@ local function streamify(m)
 		 end
    end)
    
-   local stream_out = R.connect{
-	  input = vec_out,
-	  toModule = devectorize(t_out, w_out, h_out)
-   }
+   local stream_out = change_rate(vec_out, { w_out, h_out })
 
    return R.defineModule{
 	  input = stream_in,
@@ -659,14 +618,17 @@ end
 reduce_rate.lambda = memoize(reduce_rate.lambda)
 
 function reduce_rate.constSeq(m, util)
+   local util = {{1, 560}}
+   
    -- @todo: implement
    local m = R.HS(m)
-   
+
    local input = R.input(m.inputType)
 
    local output = R.connect{
 	  input = input,
-	  toModule = m
+	  toModule = m,
+	  util = util
    }
    
    return R.defineModule{
@@ -693,9 +655,6 @@ P.get_name = get_name
 
 -- @todo: maybe this should only take in a lambda as input
 local function transform(m)
-   local RS = require 'rigelSimple'
-   local R = require 'rigel'
-
    local output
    if m.kind == 'lambda' then
 	  output = m.output
@@ -719,32 +678,38 @@ local function transform(m)
 				  if cur.kind == 'input' then
 					 return module_in
 				  elseif cur.kind == 'apply' then
-					 return RS.connect{
+					 return R.connect{
 						input = inputs[1],
-						toModule = cur.fn
+						toModule = cur.fn,
+						util = inputs[1] and inputs[1].fn and inputs[1].fn.sdfOutput or {{1,1}}
 					 }					 
 				  elseif cur.kind == 'concat' then
-					 return RS.concat(inputs)
+					 return R.concat(inputs)
 				  end
 			end)
 		 else
-			return RS.connect{
+			return R.connect{
 			   input = inputs[1],
 			   toModule = cur.fn
 			}
 		 end
+	  elseif cur.kind == 'concat' then
+		 return R.concat(inputs)
 	  end
 
 	  return cur
    end
 
+   -- run rate optimization
+   output = output:visitEach(optimize)
+   
    if m.kind == 'lambda' then
-	  return RS.defineModule{
+	  return R.defineModule{
 		 input = m.input,
-		 output = m.output:visitEach(optimize)
+		 output = output
 	  }
    else
-	  return m:visitEach(optimize)
+	  return output
    end   
 end
 P.transform = transform
