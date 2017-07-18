@@ -285,38 +285,6 @@ local function change_rate(input, out_t)
 end
 P.change_rate = change_rate
 
--- wraps a rigel vectorize
-local function vectorize(t, w, h)
-   if is_handshake(t) then
-	  t = t.params.A
-   end
-   local input = R.input(R.HS(t))
-   
-   local output = change_rate(input, { w, h })
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
-end
-P.vectorize = vectorize
-
--- wraps a rigel devectorize
-local function devectorize(t, w, h)
-   if is_handshake(t) then
-	  t = t.params.A
-   end
-   local input = R.input(R.HS(R.array2d(t, w, h)))
-
-   local output = change_rate(input, { 1, 1 })
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
-end
-P.devectorize = devectorize
-
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
