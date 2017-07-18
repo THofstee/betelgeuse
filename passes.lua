@@ -491,6 +491,11 @@ function reduce_rate.map(m, util)
 end
 reduce_rate.map = memoize(reduce_rate.map)
 
+function reduce_rate.SoAtoAoS(m, util)
+   -- @todo: implement
+end
+reduce_rate.SoAtoAoS = memoize(reduce_rate.SoAtoAoS)
+
 function reduce_rate.lift(m, util)
    -- @todo: not sure if there's much to do here, think about it
    local m = R.HS(m)
@@ -563,8 +568,24 @@ end
 reduce_rate.stencil = memoize(reduce_rate.stencil)
 
 function reduce_rate.packTuple(m, util)
-   -- @todo: figure out how to return this as a lambda
-   return m
+   local RM = require 'modules'
+   
+   local input = R.input(m.inputType, {{ 1, 1 }, { 1, 1 }})
+
+   local hack = {}
+   for i,t in ipairs(m.inputType.list) do
+	  hack[i] = t.params.A
+   end
+   
+   local output = R.connect{
+	  input = input,
+	  toModule = RM.packTuple(hack)
+   }
+   
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
 end
 reduce_rate.packTuple = memoize(reduce_rate.packTuple)
 
@@ -643,27 +664,19 @@ local function transform(m)
 			local module_in = inputs[1]
 			local m = reduce_rate(cur.fn, util)
 
-			-- @todo: this is a hack because some modules are hard to return as lambda. should either make everything consistent and return just lambda, or don't memoize the reduce_rate functions and pass in inputs to them instead and have them return the connected output
-			if m.kind == 'lambda' then
-			   -- inline the reduced rate module
-			   return m.output:visitEach(function(cur, inputs)
-					 if cur.kind == 'input' then
-						return module_in
-					 elseif cur.kind == 'apply' then
-						return RS.connect{
-						   input = inputs[1],
-						   toModule = cur.fn
-						}					 
-					 elseif cur.kind == 'concat' then
-						return RS.concat(inputs)
-					 end
-			   end)
-			else
-			   return RS.connect{
-				  input = inputs[1],
-				  toModule = m
-			   }
-			end
+			-- inline the reduced rate module
+			return m.output:visitEach(function(cur, inputs)
+				  if cur.kind == 'input' then
+					 return module_in
+				  elseif cur.kind == 'apply' then
+					 return RS.connect{
+						input = inputs[1],
+						toModule = cur.fn
+					 }					 
+				  elseif cur.kind == 'concat' then
+					 return RS.concat(inputs)
+				  end
+			end)
 		 else
 			return RS.connect{
 			   input = inputs[1],
