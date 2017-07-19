@@ -137,14 +137,12 @@ function translate.pad(m)
    local arr_t = translate(m.type.t)
    local w = m.type.w-m.left-m.right
    local h = m.type.h-m.top-m.bottom
-   local pad_w = m.type.w
-   local pad_h = m.type.h
 
    return R.modules.pad{
-		 type = arr_t,
-		 size = { w, h },
-		 pad = { m.left, m.right, m.top, m.bottom },
-		 value = 0
+	  type = arr_t,
+	  size = { w, h },
+	  pad = { m.left, m.right, m.top, m.bottom },
+	  value = 0
    }
 end
 translate.pad = memoize(translate.pad)
@@ -153,17 +151,33 @@ function translate.crop(m)
    local arr_t = translate(m.type.t)
    local w = m.type.w+m.left+m.right
    local h = m.type.h+m.top+m.bottom
-   local crop_w = m.type.w
-   local crop_h = m.type.h
 
    return R.modules.crop{
-		 type = arr_t,
-		 size = { w, h },
-		 crop = { m.left, m.right, m.top, m.bottom },
-		 value = 0
-	  }
+	  type = arr_t,
+	  size = { w, h },
+	  crop = { m.left, m.right, m.top, m.bottom },
+	  value = 0
+   }
 end
 translate.crop = memoize(translate.crop)
+
+function translate.upsample(m)
+   return R.modules.upsample{
+	  type = translate(m.in_type.t),
+	  size = { m.in_type.w, m.in_type.h },
+	  scale = { m.x, m.y }
+   }
+end
+translate.upsample = memoize(translate.upsample)
+
+function translate.downsample(m)
+   return R.modules.downsample{
+	  type = translate(m.in_type.t),
+	  size = { m.in_type.w, m.in_type.h },
+	  scale = { m.x, m.y }
+   }
+end
+translate.downsample = memoize(translate.downsample)
 
 function translate.stencil(m)
    local w = m.type.w
@@ -171,14 +185,14 @@ function translate.stencil(m)
    local in_elem_t = translate(m.type.t.t)
 
    return  C.stencil(
-		 in_elem_t,
-		 w,
-		 h,
-		 m.offset_x,
-		 m.extent_x+m.offset_x-1,
-		 m.offset_y,
-		 m.extent_y+m.offset_y-1
-	  )
+	  in_elem_t,
+	  w,
+	  h,
+	  m.offset_x,
+	  m.extent_x+m.offset_x-1,
+	  m.offset_y,
+	  m.extent_y+m.offset_y-1
+   )
 end
 translate.stencil = memoize(translate.stencil)
 
@@ -205,6 +219,7 @@ translate.lambda = memoize(translate.lambda)
 
 function translate.map(m)
    local size = { m.type.w, m.type.h }
+   print(inspect(size))
    
    -- propagate type to module applied in map
    m.m.type = m.type.t
@@ -370,6 +385,7 @@ local function unwrap_handshake(m)
    end
 end
 
+-- @todo: should plug in the semi-constructed input to the prior output to get a more accurate utilization value at each stage of the pipeline?
 local reduce_rate = {}
 local reduce_rate_mt = {
    __call = function(t, m, util)
@@ -387,6 +403,11 @@ function reduce_rate.makeHandshake(m, util)
 end
 reduce_rate.makeHandshake = memoize(reduce_rate.makeHandshake)
 
+function reduce_rate.liftHandshake(m, util)
+   assert(false, "Not yet implemented")
+end
+reduce_rate.liftHandshake = memoize(reduce_rate.liftHandshake)
+
 function reduce_rate.map(m, util)
    local t = m.inputType
    local w = m.W
@@ -394,8 +415,8 @@ function reduce_rate.map(m, util)
 
    local max_reduce = w*h
    -- @todo: should this be floor or ceil?
-   local parallelism = math.floor(max_reduce * util[1]/util[2])
-   
+   local parallelism = 1 --math.floor(max_reduce * util[1]/util[2])
+
    local input = R.input(R.HS(t))
    
    local in_rate = change_rate(input, { parallelism, 1 })
@@ -527,16 +548,98 @@ function reduce_rate.crop(m, util)
 end
 reduce_rate.crop = memoize(reduce_rate.crop)
 
+function reduce_rate.upsample(m, util)
+   local input = R.input(R.HS(m.inputType))
+
+   local in_rate = change_rate(input, { 1, 1 })
+
+   local out_size = m.outputType.size
+
+   m = R.modules.upsampleSeq{
+	  type = m.type,
+	  V = 1,
+	  size = { m.width, m.height },
+	  scale = { m.scaleX, m.scaleY }
+   }
+   
+   local inter = R.connect{
+	  input = in_rate,
+	  toModule = R.HS(m)
+   }
+
+   local output = change_rate(inter, out_size)
+
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.upsample = memoize(reduce_rate.upsample)
+
+function reduce_rate.downsample(m, util)
+   local input = R.input(R.HS(m.inputType))
+
+   local in_rate = change_rate(input, { 1, 1 })
+
+   local out_size = m.outputType.size
+
+   m = R.modules.downsampleSeq{
+	  type = m.type,
+	  V = 1,
+	  size = { m.width, m.height },
+	  scale = { m.scaleX, m.scaleY }
+   }
+   
+   local inter = R.connect{
+	  input = in_rate,
+	  toModule = R.HS(m)
+   }
+
+   local output = change_rate(inter, out_size)
+
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.downsample = memoize(reduce_rate.downsample)
+
 function reduce_rate.stencil(m, util)
    -- @todo: implement
-   local m = R.HS(m)
+
+   -- @todo: hack, should move this to translate probably
+   m.xmin = m.xmin - m.xmax
+   m.xmax = 0
+   m.ymin = m.ymin - m.ymax
+   m.ymax = 0
+
+   local size = { m.w, m.h }
+
+   local m2 = R.modules.linebuffer{
+	  type = m.inputType.over,
+	  V = 1,
+	  size = size,
+	  stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
+   }
    
+   local m = R.HS(m)
+   local m2 = R.HS(m2)
+
    local input = R.input(m.inputType)
 
-   local output = R.connect{
-	  input = input,
-	  toModule = m
+   local in_rate = change_rate(input, { 1, 1 })
+
+   local inter = R.connect{
+	  input = in_rate,
+	  toModule = m2
    }
+
+   local output = change_rate(inter, size)
+
+   -- local output = R.connect{
+   -- 	  input = input,
+   -- 	  toModule = m
+   -- }
    
    return R.defineModule{
 	  input = input,
@@ -635,6 +738,29 @@ local function transform(m)
    end
 
    local function optimize(cur, inputs)
+	  local function connect(cur, inputs)
+		 if cur.kind == 'apply' then
+			return R.connect{
+			   inputs = inputs[1],
+			   toModule = cur.fn
+			}
+		 elseif cur.kind == 'concat' then
+			return R.concat(inputs)
+		 else
+			return cur
+		 end
+	  end
+
+	  -- local cur2 = connect(cur, inputs)
+	  
+	  -- cur.inputs = inputs
+	  -- print('---')
+	  -- print(inspect(cur, {depth = 2}))
+	  -- print(inspect(cur:calcSdfRate(cur)))
+	  -- print(inspect(cur2:calcSdfRate(cur2)))
+	  -- P.rates(m)
+	  -- print('---')
+	  
 	  local util = get_utilization(cur) or { 0, 0 }
 	  if cur.kind == 'apply' then
 		 if util[2] > util[1] then
@@ -648,8 +774,7 @@ local function transform(m)
 				  elseif cur.kind == 'apply' then
 					 return R.connect{
 						input = inputs[1],
-						toModule = cur.fn,
-						util = inputs[1] and inputs[1].fn and inputs[1].fn.sdfOutput or {{1,1}}
+						toModule = cur.fn
 					 }					 
 				  elseif cur.kind == 'concat' then
 					 return R.concat(inputs)

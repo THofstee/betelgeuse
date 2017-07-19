@@ -27,6 +27,8 @@ Module = mul
        | stencil(number offset_x, number offset_y, number extent_x, number extent_y)
        | pad(number left, number right, number top, number bottom)
        | crop(number left, number right, number top, number bottom)
+       | upsample(number x, number y)
+       | downsample(number x, number y)
 # @todo: try to figure out how to remove broadcast entirely, or at least w/h
        | broadcast(number w, number h) # @todo: what about 1d broadcast?
 # @todo: consider changing multiply etc to use the lift feature and lift systolic
@@ -96,6 +98,26 @@ function L.crop(left, right, top, bottom)
    end
 
    return L_wrap(T.crop(left, right, top, bottom, type_func))
+end
+
+function L.upsample(x, y)
+   local function type_func(t)
+	  assert(t.kind == 'array2d', 'upsample requires input type of array2d')
+	  return T.array2d(t.t, t.w*x, t.h*y)
+   end
+
+   return L_wrap(T.upsample(x, y, type_func))
+end
+
+function L.downsample(x, y)
+   local function type_func(t)
+	  assert(t.kind == 'array2d', 'downsample requires input type of array2d')
+	  assert(t.w % x == 0, 'please downsample by a multiple of image size')
+	  assert(t.h % y == 0, 'please downsample by a multiple of image size')
+	  return T.array2d(t.t, t.w/x, t.h/y)
+   end
+
+   return L_wrap(T.downsample(x, y, type_func))
 end
 
 --- Returns a module that will zip two inputs together.

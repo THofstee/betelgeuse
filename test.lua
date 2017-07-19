@@ -37,15 +37,50 @@ local J = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local ij = L.zip_rec()(L.concat(I, J))
 local m = L.map(L.add())(ij)
 
--- box filter
+-- downsample
+local const_val = 30
+local x = L.input(L.uint8())
+local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
+
 local im_size = { 16, 32 }
-local pad_size = { im_size[1]+16, im_size[2]+3 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local pad = L.pad(8, 8, 2, 1)(I)
-local st = L.stencil(-1, -1, 4, 4)(pad)
-local conv = L.map(L.reduce(L.add()))
-local m = L.crop(8, 8, 2, 1)(conv(st))
-local mod = L.lambda(m, I)
+local J = L.downsample(1, 2)(L.map(add_c)(I))
+local K = L.map(add_c)(J)
+local mod = L.lambda(K, I)
+
+-- upsample
+local const_val = 30
+local x = L.input(L.uint8())
+local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
+
+local im_size = { 16, 32 }
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local J = L.upsample(2, 1)(L.map(add_c)(I))
+local K = L.map(add_c)(J)
+local mod = L.lambda(K, I)
+
+-- @todo: check map of zip_rec
+-- @todo: this should probably return a lambda so i can use it in a map?
+-- @todo: should split up generators/macros? L_wrap_macro, L_wrap_gen
+-- function make_lambda(f)
+--    return function(v)
+-- 	  local input = L.input(v.type)
+-- 	  return L.lambda(f(input), input)
+
+--    end
+-- end
+
+-- L.apply(make_lambda(function(x) return L.concat(x, L.const(L.uint8(), 30)) end), L.input(L.uint8()))
+
+-- -- box filter
+-- local im_size = { 16, 32 }
+-- local pad_size = { im_size[1]+16, im_size[2]+3 }
+-- local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+-- local pad = L.pad(8, 8, 2, 1)(I)
+-- local st = L.stencil(-1, -1, 4, 4)(pad)
+-- local conv = L.map(L.reduce(L.add()))
+-- local m = L.crop(8, 8, 2, 1)(conv(st))
+-- local mod = L.lambda(m, I)
 
 -- -- box filter conv (fork)
 -- local im_size = { 16, 32 }
