@@ -353,7 +353,7 @@ local function streamify(m)
 		 end
    end)
    
-   local stream_out = change_rate(vec_out, { w_out, h_out })
+   local stream_out = change_rate(vec_out, { 1, 1 })
 
    return R.defineModule{
 	  input = stream_in,
@@ -702,12 +702,29 @@ local function peephole(m)
    local function fuse_cast(cur, inputs)
 	  if cur.kind == 'apply' then
 		 if string.find(base(cur).kind, 'cast') then
+			local temp_cur = base(cur)
+			
 			if #inputs == 1 and string.find(base(inputs[1]).kind, 'cast') then
 			   local temp_input = base(inputs[1])
-			   local temp_cur = base(cur)
-
-			   -- @todo: remove the casts here
-			   return cur
+			   
+			   if temp_input.inputType == temp_cur.outputType then
+				  -- eliminate inverse pairs
+				  return inputs[1].inputs[1]
+			   else
+				  -- fuse casts
+				  return RS.connect{
+					 input = inputs[1].inputs[1],
+					 toModule = R.HS(
+						C.cast(
+						   temp_input.inputType,
+						   temp_cur.outputType
+						)
+					 )
+				  }
+			   end
+			elseif temp_cur.inputType == temp_cur.outputType then
+			   -- remove redundant casts
+			   return inputs[1]
 			end
 		 end
 
@@ -729,9 +746,7 @@ local function peephole(m)
 
 			   if(temp_cur.inputRate == temp_input.outputRate) then
 				  local input = inputs[1].inputs[1]
-				  local t = input.type
-				  -- @todo: not sure if these are actually the right fields.
-				  local size = { temp_cur.output.type.w, temp_cur.output.type.h }
+				  local size = temp_cur.outputType.params.A.size
 
 				  return change_rate(input, size)
 			   end
@@ -749,9 +764,13 @@ local function peephole(m)
 
    local function removal(cur, inputs)
 	  if cur.kind == 'apply' then
-		 if base(cur).kind == 'changeRate' then
-			local temp_cur = base(cur)
+		 local temp_cur = base(cur)
+		 if temp_cur.kind == 'changeRate' then
 			if temp_cur.inputRate == temp_cur.outputRate then
+			   return inputs[1]
+			end
+		 elseif string.find(temp_cur.kind, 'cast') then
+			if temp_cur.inputType == temp_cur.outputType then
 			   return inputs[1]
 			end
 		 end
