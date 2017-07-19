@@ -21,6 +21,7 @@ before_install:
   - git submodule update --init
   - cd rigel
   - git checkout 2dfix
+  - cd ..
 
 install:
 
