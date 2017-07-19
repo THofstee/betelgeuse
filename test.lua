@@ -37,28 +37,6 @@ local J = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local ij = L.zip_rec()(L.concat(I, J))
 local m = L.map(L.add())(ij)
 
--- downsample
-local const_val = 30
-local x = L.input(L.uint8())
-local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
-
-local im_size = { 16, 32 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local J = L.downsample(1, 2)(L.map(add_c)(I))
-local K = L.map(add_c)(J)
-local mod = L.lambda(K, I)
-
--- upsample
-local const_val = 30
-local x = L.input(L.uint8())
-local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
-
-local im_size = { 16, 32 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local J = L.upsample(2, 1)(L.map(add_c)(I))
-local K = L.map(add_c)(J)
-local mod = L.lambda(K, I)
-
 -- @todo: check map of zip_rec
 -- @todo: this should probably return a lambda so i can use it in a map?
 -- @todo: should split up generators/macros? L_wrap_macro, L_wrap_gen
