@@ -2,7 +2,6 @@ local L = require 'lang'
 local P = require 'passes'
 
 -- map -> downsample -> map
-local const_val = 30
 local x = L.input(L.uint8())
 local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
 
