@@ -1,12 +1,17 @@
 --- A set of compilation passes to lower to and optimize Rigel.
 -- @module passes
-package.path = "./rigel/?.lua;./rigel/src/?.lua;./rigel/examples/?.lua;" .. package.path
+local path_set = false
+if not path_set then
+   print(package.path)
+   package.path = package.path .. ';' .. "./rigel/?.lua;./rigel/src/?.lua;./rigel/examples/?.lua;"
+   path_set = true
+end
+
 local R = require 'rigelSimple'
 local C = require 'examplescommon'
 local rtypes = require 'types'
 local memoize = require 'memoize'
 local L = require 'lang'
-local T = L.raw
 
 -- @todo: remove this after debugging
 local inspect = require 'inspect'
