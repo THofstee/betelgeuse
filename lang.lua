@@ -3,6 +3,8 @@
 local asdl = require 'asdl'
 local List = asdl.List
 
+-- @todo: consider supporting tiling/stripping?
+-- @todo: flatMap?
 local L = {}
 
 local T = asdl.NewContext()

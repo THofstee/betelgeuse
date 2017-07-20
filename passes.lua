@@ -7,6 +7,7 @@ if not path_set then
 end
 
 local R = require 'rigelSimple'
+local RM = require 'modules'
 local C = require 'examplescommon'
 local rtypes = require 'types'
 local memoize = require 'memoize'
@@ -99,7 +100,8 @@ translate.const = memoize(translate.const)
 function translate.broadcast(m)
    return C.broadcast(
 	  translate(m.type.t),
-	  { m.w, m.h }
+	  m.w,
+	  m.h
    )
 end
 translate.broadcast = memoize(translate.broadcast)
@@ -313,6 +315,8 @@ local function streamify(m)
    	  return m
    end
 
+   local elem_size = 1
+
    local t_in = m.inputType.over
    local w_in = m.inputType.size[1]
    local h_in = m.inputType.size[2]
@@ -321,7 +325,7 @@ local function streamify(m)
    local w_out = m.outputType.size[1]
    local h_out = m.outputType.size[2]
    
-   local stream_in = R.input(R.HS(t_in))
+   local stream_in = R.input(R.HS(R.array(t_in, elem_size)))
 
    local vec_in = change_rate(stream_in, { w_in, h_in })
 
@@ -372,7 +376,7 @@ local function streamify(m)
 		 end
    end)
    
-   local stream_out = change_rate(vec_out, { 1, 1 })
+   local stream_out = change_rate(vec_out, { elem_size, 1 })
 
    return R.defineModule{
 	  input = stream_in,
@@ -419,7 +423,7 @@ function reduce_rate.map(m, util)
 
    local max_reduce = w*h
    -- @todo: should this be floor or ceil?
-   local parallelism = 1 --math.floor(max_reduce * util[1]/util[2])
+   local parallelism = math.floor(max_reduce * util[1]/util[2])
 
    local input = R.input(R.HS(t))
    
@@ -553,18 +557,34 @@ end
 reduce_rate.crop = memoize(reduce_rate.crop)
 
 function reduce_rate.upsample(m, util)
+   -- @todo: change to be upsampleY first then upsampleX, once implemented
    local input = R.input(R.HS(m.inputType))
+
+   -- @todo: divide by util to figure out input element type
+   -- @todo: sample for downsample
+   local in_size = m.inputType.size
 
    local in_rate = change_rate(input, { 1, 1 })
 
+   -- @todo: divide by util to figure out output element type
+   -- @todo: sample for downsample
    local out_size = m.outputType.size
 
-   m = R.modules.upsampleSeq{
+   local par = out_size[1]*out_size[2] * util[1]/util[2]
+
+   -- @todo: this is not scanline order anymore really
+   m = R.modules.upsample{
 	  type = m.type,
-	  V = 1,
-	  size = { m.width, m.height },
-	  scale = { m.scaleX, m.scaleY }
+	  size = { 1, 1 },
+	  scale = { par, 1 }
    }
+   
+   -- m = R.modules.upsampleSeq{
+   -- 	  type = m.type, -- A
+   -- 	  V = out_size[1]*out_size[2] * util[1]/util[2], -- T
+   -- 	  size = { m.width, m.height },
+   -- 	  scale = { m.scaleX, m.scaleY }
+   -- }
    
    local inter = R.connect{
 	  input = in_rate,
@@ -583,16 +603,26 @@ reduce_rate.upsample = memoize(reduce_rate.upsample)
 function reduce_rate.downsample(m, util)
    local input = R.input(R.HS(m.inputType))
 
-   local in_rate = change_rate(input, { 1, 1 })
+   local in_size = m.inputType.size
+   local par = in_size[1]*in_size[2] * util[1]/util[2]
+   
+   local in_rate = change_rate(input, { par, 1 })
 
    local out_size = m.outputType.size
 
-   m = R.modules.downsampleSeq{
+   -- @todo: this is not scanline order anymore really
+   m = R.modules.downsample{
 	  type = m.type,
-	  V = 1,
-	  size = { m.width, m.height },
-	  scale = { m.scaleX, m.scaleY }
+	  size = { par, 1 },
+	  scale = { par, 1 }
    }
+
+   -- m = R.modules.downsampleSeq{
+   -- 	  type = m.type,
+   -- 	  V = 1,
+   -- 	  size = { m.width, m.height },
+   -- 	  scale = { m.scaleX, m.scaleY }
+   -- }
    
    local inter = R.connect{
 	  input = in_rate,
@@ -653,8 +683,6 @@ end
 reduce_rate.stencil = memoize(reduce_rate.stencil)
 
 function reduce_rate.packTuple(m, util)
-   local RM = require 'modules'
-   
    local input = R.input(m.inputType, {{ 1, 1 }, { 1, 1 }})
 
    local hack = {}
@@ -745,7 +773,7 @@ local function transform(m)
 	  local function connect(cur, inputs)
 		 if cur.kind == 'apply' then
 			return R.connect{
-			   inputs = inputs[1],
+			   input = inputs[1],
 			   toModule = cur.fn
 			}
 		 elseif cur.kind == 'concat' then
@@ -755,13 +783,15 @@ local function transform(m)
 		 end
 	  end
 
-	  -- local cur2 = connect(cur, inputs)
+	  local cur2 = connect(cur, inputs)
 	  
 	  -- cur.inputs = inputs
 	  -- print('---')
-	  -- print(inspect(cur, {depth = 2}))
-	  -- print(inspect(cur:calcSdfRate(cur)))
-	  -- print(inspect(cur2:calcSdfRate(cur2)))
+	  -- print(inspect(cur.inputs[1], {depth = 2}))
+	  -- print(inspect(cur2.inputs[1], {depth = 2}))
+	  print(get_name(cur))
+	  print(inspect(cur:calcSdfRate(cur)))
+	  print(inspect(cur2:calcSdfRate(cur2)))
 	  -- P.rates(m)
 	  -- print('---')
 	  
