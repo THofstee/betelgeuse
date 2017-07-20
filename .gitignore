@@ -1,1 +1,7 @@
+;; Project Specific
+dbg/*
+doc/*
+out/*
+
+;; Lua
 luacov.*
