@@ -1,10 +1,9 @@
 local inspect = require 'inspect'
 local L = require 'lang'
+local P = require 'passes'
 --[[
    tests with rigel
 --]]
-local P = require 'passes'
-local translate = P.translate
 
 if _VERSION == 'Lua 5.3' then
    unpack = table.unpack
@@ -16,14 +15,6 @@ local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local c = L.const(L.uint8(), 1)
 local bc = L.broadcast(im_size[1], im_size[2])(c)
 local m = L.map(L.add())(L.zip_rec()(L.concat(I, bc)))
-
-local R = require 'rigelSimple'
-
-local streamify = P.streamify
-local get_name = P.get_name
-local transform = P.transform
-local changeRate = P.change_rate
-local peephole = P.peephole
 
 -- @todo: add something like betel(function(I) map(f)(I) end) that will let you declare lambdas more easily
 -- @todo: add something like an extra class that when called will lower the module into rigel and give you back something
@@ -50,15 +41,15 @@ local m = L.map(L.add())(ij)
 
 -- L.apply(make_lambda(function(x) return L.concat(x, L.const(L.uint8(), 30)) end), L.input(L.uint8()))
 
--- -- box filter
--- local im_size = { 16, 32 }
--- local pad_size = { im_size[1]+16, im_size[2]+3 }
--- local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
--- local pad = L.pad(8, 8, 2, 1)(I)
--- local st = L.stencil(-1, -1, 4, 4)(pad)
--- local conv = L.map(L.reduce(L.add()))
--- local m = L.crop(8, 8, 2, 1)(conv(st))
--- local mod = L.lambda(m, I)
+-- box filter
+local im_size = { 16, 32 }
+local pad_size = { im_size[1]+16, im_size[2]+3 }
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local pad = L.pad(8, 8, 2, 1)(I)
+local st = L.stencil(-1, -1, 4, 4)(pad)
+local conv = L.map(L.reduce(L.add()))
+local m = L.crop(8, 8, 2, 1)(conv(st))
+local mod = L.lambda(m, I)
 
 -- -- box filter conv (fork)
 -- local im_size = { 16, 32 }

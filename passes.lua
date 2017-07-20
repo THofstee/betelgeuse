@@ -2,7 +2,6 @@
 -- @module passes
 local path_set = false
 if not path_set then
-   print(package.path)
    package.path = package.path .. ';' .. "./rigel/?.lua;./rigel/src/?.lua;./rigel/examples/?.lua;"
    path_set = true
 end
