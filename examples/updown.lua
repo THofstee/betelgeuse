@@ -14,20 +14,37 @@ local x4 = L.downsample(2, 1)(x3)
 local x5 = L.map(add_c)(x4)
 local mod = L.lambda(x5, x0)
 
+local elem_size = 1
+
 -- passes
 local res
 res = P.translate(mod)
-print('--- Translate ---')
-P.rates(res)
-res = P.streamify(res)
-print('--- Streamify ---')
-P.rates(res)
+-- print('--- Translate ---')
+-- P.rates(res)
+res = P.streamify(res, elem_size)
+-- print('--- Streamify ---')
+-- P.rates(res)
 res = P.transform(res)
-print('--- Transform ---')
-P.rates(res)
+-- print('--- Transform ---')
+-- P.rates(res)
 res = P.peephole(res)
 print('--- Peephole ---')
 P.rates(res)
--- res = P.handshakes(res)
--- print('--- Handshake ---')
+
+-- passes v2
+local util = P.reduction_factor(mod, elem_size)
+
+local res
+res = P.translate(mod)
+-- print('--- Translate ---')
 -- P.rates(res)
+res = P.transform(res, util)
+-- print('--- Transform ---')
+-- P.rates(res)
+res = P.streamify(res, 1)
+-- print('--- Streamify ---')
+-- P.rates(res)
+res = P.peephole(res)
+print('--- Peephole ---')
+P.rates(res)
+

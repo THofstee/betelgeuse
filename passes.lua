@@ -225,7 +225,6 @@ translate.lambda = memoize(translate.lambda)
 
 function translate.map(m)
    local size = { m.type.w, m.type.h }
-   print(inspect(size))
    
    -- propagate type to module applied in map
    m.m.type = m.type.t
@@ -249,6 +248,22 @@ end
 -- translate.zip = memoize(translate.zip)
 
 P.translate = translate
+
+function reduction_factor(m, in_elem_size)
+   local factor = { 1, 1 }
+
+   local function process(t)
+	  if t.kind == 'array2d' then
+		 process(t.t)
+		 factor[2] = factor[2] * t.w * t.h
+	  end
+   end
+
+   process(L.unwrap(m).x.type)
+
+   return factor
+end
+P.reduction_factor = reduction_factor
 
 local function change_rate(input, out_size)
    local t = input.type
@@ -309,21 +324,30 @@ P.change_rate = change_rate
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
-local function streamify(m)
-   -- if the input is not an array the module is already streaming
-   if m.inputType.kind ~= 'array' then
-   	  return m
+local function streamify(m, elem_size)
+   local elem_size = elem_size or 1
+
+   local t_in, w_in, h_in
+   if is_handshake(m.inputType) then
+	  t_in = m.inputType.params.A.over
+	  w_in = m.inputType.params.A.size[1]
+	  h_in = m.inputType.params.A.size[1]
+   else
+	  t_in = m.inputType.over
+	  w_in = m.inputType.size[1]
+	  h_in = m.inputType.size[1]
    end
-
-   local elem_size = 1
-
-   local t_in = m.inputType.over
-   local w_in = m.inputType.size[1]
-   local h_in = m.inputType.size[2]
    
-   local t_out = m.outputType.over
-   local w_out = m.outputType.size[1]
-   local h_out = m.outputType.size[2]
+   local t_out, w_out, h_out
+   if is_handshake(m.outputType) then
+	  t_out = m.outputType.params.A.over
+	  w_out = m.outputType.params.A.size[1]
+	  h_out = m.outputType.params.A.size[2]
+   else
+	  t_out = m.outputType.over
+	  w_out = m.outputType.size[1]
+	  h_out = m.outputType.size[2]
+   end
    
    local stream_in = R.input(R.HS(R.array(t_in, elem_size)))
 
@@ -741,6 +765,14 @@ function reduce_rate.constSeq(m, util)
 end
 reduce_rate.constSeq = memoize(reduce_rate.constSeq)
 
+local function get_input(m)
+   while m.inputs[1] do
+	  m = m.inputs[1]
+   end
+   return m
+end
+P.get_input = get_input
+
 local function get_name(m)
    if m.kind == 'lambda' then
 	  return m.kind .. '(' .. get_name(m.output) .. ')'
@@ -757,7 +789,7 @@ end
 P.get_name = get_name
 
 -- @todo: maybe this should only take in a lambda as input
-local function transform(m)
+local function transform(m, util)
    local output
    if m.kind == 'lambda' then
 	  output = m.output
@@ -770,32 +802,7 @@ local function transform(m)
    end
 
    local function optimize(cur, inputs)
-	  local function connect(cur, inputs)
-		 if cur.kind == 'apply' then
-			return R.connect{
-			   input = inputs[1],
-			   toModule = cur.fn
-			}
-		 elseif cur.kind == 'concat' then
-			return R.concat(inputs)
-		 else
-			return cur
-		 end
-	  end
-
-	  local cur2 = connect(cur, inputs)
-	  
-	  -- cur.inputs = inputs
-	  -- print('---')
-	  -- print(inspect(cur.inputs[1], {depth = 2}))
-	  -- print(inspect(cur2.inputs[1], {depth = 2}))
-	  print(get_name(cur))
-	  print(inspect(cur:calcSdfRate(cur)))
-	  print(inspect(cur2:calcSdfRate(cur2)))
-	  -- P.rates(m)
-	  -- print('---')
-	  
-	  local util = get_utilization(cur) or { 0, 0 }
+	  local util = util or get_utilization(cur) or { 0, 0 }
 	  if cur.kind == 'apply' then
 		 if util[2] > util[1] then
 			local module_in = inputs[1]
@@ -822,6 +829,12 @@ local function transform(m)
 		 end
 	  elseif cur.kind == 'concat' then
 		 return R.concat(inputs)
+	  elseif cur.kind == 'input' then
+		 if is_handshake(cur.type) then
+			return cur
+		 else
+			return R.input(R.HS(cur.type))
+		 end
 	  end
 
 	  return cur
@@ -832,7 +845,7 @@ local function transform(m)
    
    if m.kind == 'lambda' then
 	  return R.defineModule{
-		 input = m.input,
+		 input = get_input(output),
 		 output = output
 	  }
    else
@@ -964,14 +977,6 @@ local function peephole(m)
    end
 end
 P.peephole = peephole
-
-local function get_input(m)
-   while m.inputs[1] do
-	  m = m.inputs[1]
-   end
-   return m
-end
-P.get_input = get_input
 
 local function get_type_signature(cur)
    if cur.kind == 'input' or cur.kind == 'constant' then
