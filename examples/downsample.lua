@@ -5,9 +5,9 @@ local P = require 'passes'
 local x = L.input(L.uint8())
 local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
 
-local im_size = { 2, 4 }
+local im_size = { 4, 2 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local J = L.downsample(1, 2)(L.map(add_c)(I))
+local J = L.downsample(2, 1)(L.map(add_c)(I))
 local K = L.map(add_c)(J)
 local mod = L.lambda(K, I)
 

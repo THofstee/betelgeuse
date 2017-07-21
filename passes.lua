@@ -65,11 +65,13 @@ function translate.tuple(t)
 end
 translate.tuple = memoize(translate.tuple)
 
+-- @todo: consider wrapping singletons in T[1,1]
 function translate.input(i)
    return R.input(translate(i.type))
 end
 translate.input = memoize(translate.input)
 
+-- @todo: consider wrapping singletons in T[1,1]
 function translate.const(c)
    -- Flatten an n*m table into a 1*(n*m) table
    local function flatten_mat(m)
@@ -329,13 +331,15 @@ local function streamify(m, elem_size)
 
    local t_in, w_in, h_in
    if is_handshake(m.inputType) then
+	  if m.inputType.params.A.kind ~= 'array' then return m end
 	  t_in = m.inputType.params.A.over
 	  w_in = m.inputType.params.A.size[1]
-	  h_in = m.inputType.params.A.size[1]
+	  h_in = m.inputType.params.A.size[2]
    else
+	  if m.inputType.kind ~= 'array' then return m end
 	  t_in = m.inputType.over
 	  w_in = m.inputType.size[1]
-	  h_in = m.inputType.size[1]
+	  h_in = m.inputType.size[2]
    end
    
    local t_out, w_out, h_out
@@ -367,13 +371,9 @@ local function streamify(m, elem_size)
 					 P = 1,
 					 value = { cur.value }
 				  }
-			   ),
-			   util = vec_in.fn.sdfOutput
+			   )
 			}
 
-			-- @todo: hack, remove by fixing sdf solve in rigel
-			const.fn.fn.util = vec_in.fn.sdfOutput
-			
 			return R.connect{
 			   input = const,
 			   toModule = R.HS(
@@ -447,7 +447,7 @@ function reduce_rate.map(m, util)
 
    local max_reduce = w*h
    -- @todo: should this be floor or ceil?
-   local parallelism = math.floor(max_reduce * util[1]/util[2])
+   local parallelism = math.max(1, math.floor(max_reduce * util[1]/util[2]))
 
    local input = R.input(R.HS(t))
    
@@ -597,18 +597,20 @@ function reduce_rate.upsample(m, util)
    local par = out_size[1]*out_size[2] * util[1]/util[2]
 
    -- @todo: this is not scanline order anymore really
-   m = R.modules.upsample{
-	  type = m.type,
-	  size = { 1, 1 },
-	  scale = { par, 1 }
-   }
-   
-   -- m = R.modules.upsampleSeq{
-   -- 	  type = m.type, -- A
-   -- 	  V = out_size[1]*out_size[2] * util[1]/util[2], -- T
-   -- 	  size = { m.width, m.height },
-   -- 	  scale = { m.scaleX, m.scaleY }
-   -- }
+   if par == 1 then
+	  m = R.modules.upsampleSeq{
+		 type = m.type, -- A
+		 V = out_size[1]*out_size[2] * util[1]/util[2], -- T
+		 size = { m.width, m.height },
+		 scale = { m.scaleX, m.scaleY }
+	  }
+   else
+	  m = R.modules.upsample{
+		 type = m.type,
+		 size = { 1, 1 },
+		 scale = { m.scaleX, m.scaleY }
+	  }
+   end
    
    local inter = R.connect{
 	  input = in_rate,
@@ -635,18 +637,20 @@ function reduce_rate.downsample(m, util)
    local out_size = m.outputType.size
 
    -- @todo: this is not scanline order anymore really
-   m = R.modules.downsample{
-	  type = m.type,
-	  size = { par, 1 },
-	  scale = { par, 1 }
-   }
-
-   -- m = R.modules.downsampleSeq{
-   -- 	  type = m.type,
-   -- 	  V = 1,
-   -- 	  size = { m.width, m.height },
-   -- 	  scale = { m.scaleX, m.scaleY }
-   -- }
+   if par == 1 then
+	  m = R.modules.downsampleSeq{
+		 type = m.type,
+		 V = 1,
+		 size = { m.width, m.height },
+		 scale = { m.scaleX, m.scaleY }
+	  }
+   else
+	  m = R.modules.downsample{
+		 type = m.type,
+		 size = { par, 1 },
+		 scale = { m.scaleX, m.scaleY }
+	  }
+   end
    
    local inter = R.connect{
 	  input = in_rate,
@@ -745,8 +749,6 @@ end
 reduce_rate.lambda = memoize(reduce_rate.lambda)
 
 function reduce_rate.constSeq(m, util)
-   local util = {{1, 560}}
-   
    -- @todo: implement
    local m = R.HS(m)
 
@@ -754,8 +756,7 @@ function reduce_rate.constSeq(m, util)
 
    local output = R.connect{
 	  input = input,
-	  toModule = m,
-	  util = util
+	  toModule = m
    }
    
    return R.defineModule{
