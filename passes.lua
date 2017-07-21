@@ -251,8 +251,8 @@ end
 
 P.translate = translate
 
-function reduction_factor(m, in_elem_size)
-   local factor = { 1, 1 }
+function reduction_factor(m, in_rate)
+   local factor = { in_rate[1], in_rate[2] }
 
    local function process(t)
 	  if t.kind == 'array2d' then
@@ -262,6 +262,9 @@ function reduction_factor(m, in_elem_size)
    end
 
    process(L.unwrap(m).x.type)
+
+   local scale = math.min(factor[1], factor[2])
+   factor = { factor[1]/scale, factor[2]/scale }
 
    return factor
 end
@@ -327,7 +330,8 @@ P.change_rate = change_rate
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
 local function streamify(m, elem_size)
-   local elem_size = elem_size or 1
+   elem_size = elem_size or { 1, 1 }
+   elem_size = math.max(elem_size[1]/elem_size[2], 1)
 
    local t_in, w_in, h_in
    if is_handshake(m.inputType) then
@@ -586,9 +590,12 @@ function reduce_rate.upsample(m, util)
 
    -- @todo: divide by util to figure out input element type
    -- @todo: sample for downsample
-   local in_size = m.inputType.size
+   local in_size = { m.inputType.size[1], m.inputType.size[2] }
+   -- @todo: hack
+   in_size[1] = in_size[1]/util[1]
+   in_size[2] = in_size[2]/util[2]
 
-   local in_rate = change_rate(input, { 1, 1 })
+   local in_rate = change_rate(input, in_size)
 
    -- @todo: divide by util to figure out output element type
    -- @todo: sample for downsample
@@ -607,7 +614,7 @@ function reduce_rate.upsample(m, util)
    else
 	  m = R.modules.upsample{
 		 type = m.type,
-		 size = { 1, 1 },
+		 size = in_size,
 		 scale = { m.scaleX, m.scaleY }
 	  }
    end
