@@ -326,6 +326,65 @@ local function change_rate(input, out_size)
 end
 P.change_rate = change_rate
 
+-- converts a module to be handshaked
+local function to_handshake(m)
+   local t_in, w_in, h_in
+   if is_handshake(m.inputType) then
+	  return m
+   end
+   
+   local hs_in = R.input(R.HS(m.inputType))
+
+   -- inline the top level of the module
+   local hs_out = m.output:visitEach(function(cur, inputs)
+   		 if cur.kind == 'input' then
+   			return hs_in
+   		 elseif cur.kind == 'constant' then
+			-- @todo: this is sort of hacky... convert to HS constseq shift by 0
+			local const = R.connect{
+			   input = nil,
+			   toModule = R.HS(
+				  R.modules.constSeq{
+					 type = R.array2d(cur.type, 1, 1),
+					 P = 1,
+					 value = { cur.value }
+				  }
+			   )
+			}
+
+			return R.connect{
+			   input = const,
+			   toModule = R.HS(
+				  C.cast(
+					 R.array2d(cur.type, 1, 1),
+					 cur.type
+				  )
+			   )
+			}
+		 elseif cur.kind == 'apply' then
+			if inputs[1].type.kind == 'tuple' then
+			   return R.connect{
+				  input = R.fanIn(inputs[1].inputs),
+				  toModule = R.HS(cur.fn)
+			   }
+			else
+			   return R.connect{
+				  input = inputs[1],
+				  toModule = R.HS(cur.fn)
+			   }
+			end
+		 elseif cur.kind == 'concat' then
+			return R.concat(inputs)
+		 end
+   end)
+   
+   return R.defineModule{
+	  input = hs_in,
+	  output = hs_out
+   }
+end
+P.to_handshake = to_handshake
+
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
@@ -361,6 +420,7 @@ local function streamify(m, elem_size)
 
    local vec_in = change_rate(stream_in, { w_in, h_in })
 
+   -- @todo: this should just use to_handshake and then inline instead of duplicating the logic now that to_handshake is separated out
    -- inline the top level of the module
    local vec_out = m.output:visitEach(function(cur, inputs)
    		 if cur.kind == 'input' then
@@ -834,7 +894,7 @@ local function transform(m, util)
 		 else
 			return R.connect{
 			   input = inputs[1],
-			   toModule = R.HS(cur.fn)
+			   toModule = cur.fn
 			}
 		 end
 	  elseif cur.kind == 'concat' then
@@ -878,9 +938,6 @@ P.base = base
 
 -- @todo: maybe this should only take in a lambda as input
 local function peephole(m)
-   local RS = require 'rigelSimple'
-   local R = require 'rigel'
-
    local function fuse_cast(cur, inputs)
 	  if cur.kind == 'apply' then
 		 if string.find(base(cur).kind, 'cast') then
@@ -894,7 +951,7 @@ local function peephole(m)
 				  return inputs[1].inputs[1]
 			   else
 				  -- fuse casts
-				  return RS.connect{
+				  return R.connect{
 					 input = inputs[1].inputs[1],
 					 toModule = R.HS(
 						C.cast(
@@ -910,7 +967,7 @@ local function peephole(m)
 			end
 		 end
 
-		 return RS.connect{
+		 return R.connect{
 			input = inputs[1],
 			toModule = cur.fn
 		 }
@@ -935,7 +992,7 @@ local function peephole(m)
 			end
 		 end
 
-		 return RS.connect{
+		 return R.connect{
 			input = inputs[1],
 			toModule = cur.fn
 		 }
@@ -957,7 +1014,7 @@ local function peephole(m)
 			end
 		 end
 
-		 return RS.connect{
+		 return R.connect{
 			input = inputs[1],
 			toModule = cur.fn
 		 }
@@ -978,7 +1035,7 @@ local function peephole(m)
    output = output:visitEach(removal)
 
    if m.kind == 'lambda' then
-	  return RS.defineModule{
+	  return R.defineModule{
 		 input = m.input,
 		 output = output
 	  }
@@ -1077,115 +1134,6 @@ local function handshakes(m)
    return 
 end
 P.handshakes = handshakes
-
-function P.debug(r)
-   -- local Graphviz = require 'graphviz'
-   -- local dot = Graphviz()
-
-   -- local function str(s)
-   -- 	  return "\"" .. tostring(s) .. "\""
-   -- end
-
-   -- local options = {
-   -- 	  depth = 2,
-   -- 	  process = function(item, path)
-   -- 		 if(item == 'loc') then
-   -- 			return nil
-   -- 		 end
-   -- 		 return item
-   -- 	  end
-   -- }
-   
-   -- local verbose = true
-   -- local a = {}
-   -- setmetatable(a, dispatch_mt)
-
-   -- function a.input(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, r.kind .. '(' .. tostring(r.type) .. ')')
-   -- 	  return ident
-   -- end
-
-   -- function a.apply(r)
-   -- 	  local ident = str(r)
-
-   -- 	  if verbose then	   
-   -- 		 dot:node(ident, "apply")
-   -- 		 dot:edge(a(r.fn), ident)
-   -- 		 dot:edge(a(r.inputs[1]), ident)
-   -- 	  else
-   -- 		 dot:edge(a(r.inputs[1]), a(r.fn))
-   -- 	  end
-   
-   -- 	  return ident
-   -- end
-
-   -- function a.liftHandshake(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, "liftHandshake")
-   -- 	  dot:edge(a(r.fn), ident)
-   -- 	  return ident
-   -- end
-
-   -- function a.changeRate(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, "changeRate[" .. r.inputRate .. "->" .. r.outputRate .. "]")
-   -- 	  return ident
-   -- end
-
-   -- function a.waitOnInput(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, "waitOnInput")
-   -- 	  dot:edge(a(r.fn), ident)
-   -- 	  return ident
-   -- end
-
-   -- function a.map(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, "map")
-   -- 	  return ident
-   -- end
-
-   -- a["lift_slice_typeuint8[1,1]_xl0_xh0_yl0_yh0"] = function(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, "lift_slice_typeuint8[1,1]_xl0_xh0_yl0_yh0")
-   -- 	  return ident
-   -- end
-
-   -- function a.concatArray2d(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, "concatArray2d")
-   -- 	  return ident
-   -- end
-   
-   -- function a.makeHandshake(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, "makeHandshake")
-   -- 	  dot:edge(a(r.fn), ident)
-   -- 	  return ident
-   -- end
-
-   -- function a.fn(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:edge(ident, "fn")
-   -- 	  return ident
-   -- end
-
-   -- function a.lambda(r)
-   -- 	  local ident = str(r)
-   -- 	  dot:node(ident, r.kind)
-   -- 	  dot:edge(a(r.input), ident)
-   -- 	  dot:edge(a(r.output), ident)
-   -- 	  return ident
-   -- end
-
-   -- a(r)
-   -- dot:write('dbg/graph.dot')
-   -- dot:compile('dbg/graph.dot', 'png')
-   
-   -- -- print(inspect(r, options))
-   -- -- dot:render('dbg/graph.dot', 'png')
-end
 
 function P.import()
    local reserved = {
