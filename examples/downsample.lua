@@ -1,4 +1,4 @@
--- local L = require 'lang'
+local L = require 'lang'
 -- local P = require 'passes'
 
 -- -- map -> downsample -> map
