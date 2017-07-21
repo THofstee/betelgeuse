@@ -591,9 +591,10 @@ function reduce_rate.upsample(m, util)
    -- @todo: divide by util to figure out input element type
    -- @todo: sample for downsample
    local in_size = { m.inputType.size[1], m.inputType.size[2] }
+   -- @todo: reduce in x first or in y first?
    -- @todo: hack
-   in_size[1] = in_size[1]/util[1]
-   in_size[2] = in_size[2]/util[2]
+   in_size[2] = math.max(1, in_size[2]/util[2])
+   in_size[1] = math.max(1, in_size[1]/(util[2]/(m.inputType.size[2]/in_size[2])))
 
    local in_rate = change_rate(input, in_size)
 
@@ -809,6 +810,7 @@ local function transform(m, util)
 	  return m:calcSdfRate(output)
    end
 
+   -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
    local function optimize(cur, inputs)
 	  local util = util or get_utilization(cur) or { 0, 0 }
 	  if cur.kind == 'apply' then
@@ -832,7 +834,7 @@ local function transform(m, util)
 		 else
 			return R.connect{
 			   input = inputs[1],
-			   toModule = cur.fn
+			   toModule = R.HS(cur.fn)
 			}
 		 end
 	  elseif cur.kind == 'concat' then
