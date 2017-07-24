@@ -2,7 +2,7 @@ local R = require 'rigelSimple'
 local C = require 'examplescommon'
 local rtypes = require 'types'
 local memoize = require 'memoize'
-local L = require 'lang'
+local L = require 'betelgeuse.lang'
 
 local translate = {}
 local translate_mt = {

@@ -6,7 +6,7 @@ describe('loading #lib', function()
 				  it('tests undeclared variable use', function()
 						assert.has_no.errors(function()
 							  require 'strict'
-							  require 'lang'
+							  require 'betelgeuse.lang'
 						end)
 				  end)
 			end)
@@ -16,7 +16,7 @@ describe('loading #lib', function()
 						_G.__EXTRASTRICT = true
 						assert.has_no.errors(function()
 							  require 'strict'
-							  require 'lang'
+							  require 'betelgeuse.lang'
 						end)
 				  end)
 			end)
@@ -26,7 +26,7 @@ end)
    Library Usage Tests
 --]]
 describe('usage #lib', function()
-			local L = require 'lang'
+			local L = require 'betelgeuse.lang'
 			L.import()
 
 			--[[
@@ -127,7 +127,7 @@ end)
    Examples
 --]]
 describe('some examples', function()
-			local L = require 'lang'
+			local L = require 'betelgeuse.lang'
 			L.import()
 
 			it('add constant to image (broadcast)', function()

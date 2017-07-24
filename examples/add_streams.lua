@@ -1,4 +1,4 @@
-local L = require 'lang'
+local L = require 'betelgeuse.lang'
 
 -- add two image streams
 local im_size = { 1920, 1080 }

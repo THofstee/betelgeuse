@@ -1,5 +1,5 @@
-local L = require 'lang'
-local P = require 'passes'
+local L = require 'betelgeuse.lang'
+local P = require 'betelgeuse.passes'
 
 -- convolution
 local im_size = { 16, 32 }

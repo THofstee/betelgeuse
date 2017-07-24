@@ -1,7 +1,6 @@
 local inspect = require 'inspect'
-local L = require 'lang'
-local P = require 'passes'
-local R = require 'rigelSimple'
+local L = require 'betelgeuse.lang'
+local P = require 'betelgeuse.passes'
 
 local get_name = P.get_name
 local transform = P.transform
@@ -48,9 +47,6 @@ local add_c = L.lambda(L.add()(L.concat(x, c)), x)
 local r2 = translate(add_c(x))
 local r3 = translate(add_c)
 local r4 = P.streamify(translate(add_c))
--- R.harness{ fn = R.HS(translate(m)),
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-0translate", outSize = im_size }
 
 local out = translate(m)
 print("--- After Translate ---")
@@ -58,27 +54,15 @@ P.rates(out)
 local stream_out = P.streamify(translate(m))
 print("--- After Streamify ---")
 P.rates(stream_out)
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-1streamify", outSize = im_size }
 
 local stream_out = transform(stream_out)
 print("--- After Transform ---")
 P.rates(stream_out)
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-2transform", outSize = im_size }
 
 local stream_out = peephole(stream_out)
 print("--- After Peephole ---")
 P.rates(stream_out)
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test-3peephole", outSize = im_size }
 
 local stream_out = P.handshakes(stream_out)
 print("--- After Handshake Optimization ---")
 P.rates(stream_out)
--- R.harness{ fn = stream_out,
---            inFile = "box_32_16.raw", inSize = im_size,
---            outFile = "test", outSize = im_size }

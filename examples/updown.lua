@@ -1,5 +1,5 @@
-local L = require 'lang'
-local P = require 'passes'
+local L = require 'betelgeuse.lang'
+local P = require 'betelgeuse.passes'
 
 -- map -> upsample -> map -> downsample -> map
 local x = L.input(L.uint8())
