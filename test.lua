@@ -5,10 +5,6 @@ local P = require 'passes'
    tests with rigel
 --]]
 
-if _VERSION == 'Lua 5.3' then
-   unpack = table.unpack
-end
-
 -- add constant to image (broadcast)
 local im_size = { 1920, 1080 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))

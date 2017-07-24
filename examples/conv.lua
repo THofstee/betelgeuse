@@ -18,6 +18,9 @@ local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
 local m = L.crop(8, 8, 2, 1)(conv(st_wt))
 local mod = L.lambda(m, I)
 
+local elem_size = { 1, 1 }
+local util = P.reduction_factor(mod, elem_size)
+
 -- passes
 local res
 res = P.translate(mod)

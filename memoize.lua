@@ -35,6 +35,9 @@ y = memoizedSlowFunc('c','d') -- fast
 ]]
 
 -- private stuff
+if _VERSION == 'Lua 5.3' then
+   unpack = table.unpack
+end
 
 local globalCache = {}
 

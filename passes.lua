@@ -2,7 +2,7 @@
 -- @module passes
 local path_set = false
 if not path_set then
-   package.path = package.path .. ';' .. "./rigel/?.lua;./rigel/src/?.lua;./rigel/examples/?.lua;"
+   package.path = "./rigel/?.lua;./rigel/src/?.lua;./rigel/examples/?.lua;" .. package.path
    path_set = true
 end
 
@@ -18,6 +18,8 @@ local inspect = require 'inspect'
 
 local P = {}
 
+P.translate = require 'passes.translate'
+
 local _VERBOSE = _VERBOSE or false
 
 local function is_handshake(t)
@@ -30,227 +32,15 @@ local function is_handshake(t)
    return false
 end
 
-local translate = {}
-local translate_mt = {
-   __call = function(t, m)
-	  if _VERBOSE then print("translate." .. m.kind) end
-	  assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
-	  return t[m.kind](m)
+local function unwrap_handshake(m)
+   if m.kind == 'makeHandshake' then
+	  return m.fn
+   else
+	  return m
    end
-}
-setmetatable(translate, translate_mt)
-
-function translate.wrapped(w)
-   return translate(L.unwrap(w))
 end
-translate.wrapped = memoize(translate.wrapped)
 
-function translate.array2d(t)
-   return R.array2d(translate(t.t), t.w, t.h)
-end
-translate.array2d = memoize(translate.array2d)
-
-function translate.uint(t)
-   return rtypes.uint(t.n)
-end
-translate.uint = memoize(translate.uint)
-
-function translate.tuple(t)
-   local translated = {}
-   for i, typ in ipairs(t.ts) do
-	  translated[i] = translate(typ)
-   end
-   
-   return R.tuple(translated)
-end
-translate.tuple = memoize(translate.tuple)
-
--- @todo: consider wrapping singletons in T[1,1]
-function translate.input(i)
-   return R.input(translate(i.type))
-end
-translate.input = memoize(translate.input)
-
--- @todo: consider wrapping singletons in T[1,1]
-function translate.const(c)
-   -- Flatten an n*m table into a 1*(n*m) table
-   local function flatten_mat(m)
-	  if type(m) == 'number' then
-		 return m
-	  end
-	  
-	  local idx = 0
-	  local res = {}
-	  
-	  for h,row in ipairs(m) do
-		 for w,elem in ipairs(row) do
-			idx = idx + 1
-			res[idx] = elem
-		 end
-	  end
-	  
-	  return res
-   end
-
-   return R.constant{
-	  type = translate(c.type),
-	  value = flatten_mat(c.v)
-   }
-end
-translate.const = memoize(translate.const)
-
-function translate.broadcast(m)
-   return C.broadcast(
-	  translate(m.type.t),
-	  m.w,
-	  m.h
-   )
-end
-translate.broadcast = memoize(translate.broadcast)
-
-function translate.concat(c)
-   local translated = {}
-   for i,v in ipairs(c.vs) do
-	  translated[i] = translate(v)
-   end
-   return R.concat(translated)
-end
-translate.concat = memoize(translate.concat)
-
-function translate.add(m)
-   return R.modules.sum{
-	  inType = R.uint8,
-	  outType = R.uint8
-   }
-end
-translate.add = memoize(translate.add)
-
-function translate.mul(m)
-   return R.modules.mult{
-	  inType = R.uint8,
-	  outType = R.uint8
-   }
-end
-translate.add = memoize(translate.add)
-
-function translate.reduce(m)
-   return R.modules.reduce{
-	  fn = translate(m.m),
-	  size = { m.in_type.w, m.in_type.h }
-   }
-end
-translate.reduce = memoize(translate.reduce)
-
-function translate.pad(m)
-   local arr_t = translate(m.type.t)
-   local w = m.type.w-m.left-m.right
-   local h = m.type.h-m.top-m.bottom
-
-   return R.modules.pad{
-	  type = arr_t,
-	  size = { w, h },
-	  pad = { m.left, m.right, m.top, m.bottom },
-	  value = 0
-   }
-end
-translate.pad = memoize(translate.pad)
-
-function translate.crop(m)
-   local arr_t = translate(m.type.t)
-   local w = m.type.w+m.left+m.right
-   local h = m.type.h+m.top+m.bottom
-
-   return R.modules.crop{
-	  type = arr_t,
-	  size = { w, h },
-	  crop = { m.left, m.right, m.top, m.bottom },
-	  value = 0
-   }
-end
-translate.crop = memoize(translate.crop)
-
-function translate.upsample(m)
-   return R.modules.upsample{
-	  type = translate(m.in_type.t),
-	  size = { m.in_type.w, m.in_type.h },
-	  scale = { m.x, m.y }
-   }
-end
-translate.upsample = memoize(translate.upsample)
-
-function translate.downsample(m)
-   return R.modules.downsample{
-	  type = translate(m.in_type.t),
-	  size = { m.in_type.w, m.in_type.h },
-	  scale = { m.x, m.y }
-   }
-end
-translate.downsample = memoize(translate.downsample)
-
-function translate.stencil(m)
-   local w = m.type.w
-   local h = m.type.h
-   local in_elem_t = translate(m.type.t.t)
-
-   return  C.stencil(
-	  in_elem_t,
-	  w,
-	  h,
-	  m.offset_x,
-	  m.extent_x+m.offset_x-1,
-	  m.offset_y,
-	  m.extent_y+m.offset_y-1
-   )
-end
-translate.stencil = memoize(translate.stencil)
-
-function translate.apply(a)
-   -- propagate output type back to the module
-   a.m.type = a.type
-   a.m.out_type = a.type
-   a.m.in_type = a.v.type
-
-   return R.connect{
-	  input = translate(a.v),
-	  toModule = translate(a.m)
-   }
-end
-translate.apply = memoize(translate.apply)
-
-function translate.lambda(l)
-   return R.defineModule{
-	  input = translate(l.x),
-	  output = translate(l.f)
-   }
-end
-translate.lambda = memoize(translate.lambda)
-
-function translate.map(m)
-   local size = { m.type.w, m.type.h }
-   
-   -- propagate type to module applied in map
-   m.m.type = m.type.t
-   m.m.out_type = m.out_type.t
-   m.m.in_type = m.in_type.t
-   
-   return R.modules.map{
-	  fn = translate(m.m),
-	  size = size
-   }
-end
-translate.map = memoize(translate.map)
-
-function translate.zip(m)
-   return R.modules.SoAtoAoS{
-	  type = translate(m.out_type.t).list,
-	  size = { m.out_type.w, m.out_type.h }
-   }
-end
--- @todo: I think only the values should be memoized.
--- translate.zip = memoize(translate.zip)
-
-P.translate = translate
-
+-- @todo: should make this a class method in lang
 function reduction_factor(m, in_rate)
    local factor = { in_rate[1], in_rate[2] }
 
@@ -326,6 +116,23 @@ local function change_rate(input, out_size)
 end
 P.change_rate = change_rate
 
+local function inline(m, input)
+   return m.output:visitEach(function(cur, inputs)
+   		 if cur.kind == 'input' then
+   			return input
+		 elseif cur.kind == 'apply' then
+			return R.connect{
+			   input = inputs[1],
+			   toModule = cur.fn
+			}
+		 elseif cur.kind == 'concat' then
+			return R.concat(inputs)
+		 else
+			assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
+		 end
+   end)
+end
+
 -- converts a module to be handshaked
 local function to_handshake(m)
    local t_in, w_in, h_in
@@ -388,8 +195,8 @@ P.to_handshake = to_handshake
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
-local function streamify(m, elem_size)
-   elem_size = elem_size or { 1, 1 }
+local function streamify(m, elem_rate)
+   elem_size = elem_rate or { 1, 1 }
    elem_size = math.max(elem_size[1]/elem_size[2], 1)
 
    local t_in, w_in, h_in
@@ -415,54 +222,12 @@ local function streamify(m, elem_size)
 	  w_out = m.outputType.size[1]
 	  h_out = m.outputType.size[2]
    end
-   
-   local stream_in = R.input(R.HS(R.array(t_in, elem_size)))
+
+   local stream_in = R.input(R.HS(R.array(t_in, elem_size)), {elem_rate})
 
    local vec_in = change_rate(stream_in, { w_in, h_in })
-
-   -- @todo: this should just use to_handshake and then inline instead of duplicating the logic now that to_handshake is separated out
-   -- inline the top level of the module
-   local vec_out = m.output:visitEach(function(cur, inputs)
-   		 if cur.kind == 'input' then
-   			return vec_in
-   		 elseif cur.kind == 'constant' then
-			-- @todo: this is sort of hacky... convert to HS constseq shift by 0
-			local const = R.connect{
-			   input = nil,
-			   toModule = R.HS(
-				  R.modules.constSeq{
-					 type = R.array2d(cur.type, 1, 1),
-					 P = 1,
-					 value = { cur.value }
-				  }
-			   )
-			}
-
-			return R.connect{
-			   input = const,
-			   toModule = R.HS(
-				  C.cast(
-					 R.array2d(cur.type, 1, 1),
-					 cur.type
-				  )
-			   )
-			}
-		 elseif cur.kind == 'apply' then
-			if inputs[1].type.kind == 'tuple' then
-			   return R.connect{
-				  input = R.fanIn(inputs[1].inputs),
-				  toModule = R.HS(cur.fn)
-			   }
-			else
-			   return R.connect{
-				  input = inputs[1],
-				  toModule = R.HS(cur.fn)
-			   }
-			end
-		 elseif cur.kind == 'concat' then
-			return R.concat(inputs)
-		 end
-   end)
+   
+   local vec_out = inline(to_handshake(m), vec_in)
    
    local stream_out = change_rate(vec_out, { elem_size, 1 })
 
@@ -473,15 +238,6 @@ local function streamify(m, elem_size)
 end
 P.streamify = streamify
 
-local function unwrap_handshake(m)
-   if m.kind == 'makeHandshake' then
-	  return m.fn
-   else
-	  return m
-   end
-end
-
--- @todo: should plug in the semi-constructed input to the prior output to get a more accurate utilization value at each stage of the pipeline?
 local reduce_rate = {}
 local reduce_rate_mt = {
    __call = function(t, m, util)
@@ -662,22 +418,22 @@ function reduce_rate.upsample(m, util)
    -- @todo: sample for downsample
    local out_size = m.outputType.size
 
-   local par = out_size[1]*out_size[2] * util[1]/util[2]
+   local par = math.max(1, out_size[1]*out_size[2] * util[1]/util[2])
 
    -- @todo: this is not scanline order anymore really
    if par == 1 then
-	  m = R.modules.upsampleSeq{
-		 type = m.type, -- A
-		 V = out_size[1]*out_size[2] * util[1]/util[2], -- T
-		 size = { m.width, m.height },
-		 scale = { m.scaleX, m.scaleY }
-	  }
+   	  m = R.modules.upsampleSeq{
+   		 type = m.type, -- A
+   		 V = par, -- T
+   		 size = { m.width, m.height },
+   		 scale = { m.scaleX, m.scaleY }
+   	  }
    else
-	  m = R.modules.upsample{
-		 type = m.type,
-		 size = in_size,
-		 scale = { m.scaleX, m.scaleY }
-	  }
+   	  m = R.modules.upsample{
+   		 type = m.type,
+   		 size = in_size,
+   		 scale = { m.scaleX, m.scaleY }
+   	  }
    end
    
    local inter = R.connect{
@@ -698,27 +454,41 @@ function reduce_rate.downsample(m, util)
    local input = R.input(R.HS(m.inputType))
 
    local in_size = m.inputType.size
-   local par = in_size[1]*in_size[2] * util[1]/util[2]
+   local par = math.max(1, in_size[1]*in_size[2] * util[1]/util[2])
    
    local in_rate = change_rate(input, { par, 1 })
 
    local out_size = m.outputType.size
 
    -- @todo: this is not scanline order anymore really
-   if par == 1 then
-	  m = R.modules.downsampleSeq{
-		 type = m.type,
-		 V = 1,
-		 size = { m.width, m.height },
-		 scale = { m.scaleX, m.scaleY }
-	  }
-   else
-	  m = R.modules.downsample{
-		 type = m.type,
-		 size = { par, 1 },
-		 scale = { m.scaleX, m.scaleY }
-	  }
-   end
+   m = RM.downsampleXSeq(
+	  m.type,
+	  m.width,
+	  m.height,
+	  par,
+	  m.scaleX
+   )
+   -- if par == 1 then
+   -- 	  m = RM.downsampleXSeq(
+   -- 		 m.type,
+   -- 		 m.width,
+   -- 		 m.height,
+   -- 		 par,
+   -- 		 m.scaleX
+   -- 	  )
+   -- 	  -- m = R.modules.downsampleSeq{
+   -- 	  -- 	 type = m.type,
+   -- 	  -- 	 V = 1,
+   -- 	  -- 	 size = { m.width, m.height },
+   -- 	  -- 	 scale = { m.scaleX, m.scaleY }
+   -- 	  -- }
+   -- else
+   -- 	  m = R.modules.downsample{
+   -- 		 type = m.type,
+   -- 		 size = { par, 1 },
+   -- 		 scale = { m.scaleX, m.scaleY }
+   -- 	  }
+   -- end
    
    local inter = R.connect{
 	  input = in_rate,
@@ -765,11 +535,6 @@ function reduce_rate.stencil(m, util)
    }
 
    local output = change_rate(inter, size)
-
-   -- local output = R.connect{
-   -- 	  input = input,
-   -- 	  toModule = m
-   -- }
    
    return R.defineModule{
 	  input = input,
@@ -779,12 +544,14 @@ end
 reduce_rate.stencil = memoize(reduce_rate.stencil)
 
 function reduce_rate.packTuple(m, util)
-   local input = R.input(m.inputType, {{ 1, 1 }, { 1, 1 }})
-
    local hack = {}
+   local sdf = {}
    for i,t in ipairs(m.inputType.list) do
 	  hack[i] = t.params.A
+	  sdf[i] = { 1, 1 }
    end
+
+   local input = R.input(m.inputType, sdf)
    
    local output = R.connect{
 	  input = input,
@@ -867,6 +634,7 @@ local function transform(m, util)
    end
 
    local function get_utilization(m)
+	  print('WARN: get_utilization is deprecated')
 	  return m:calcSdfRate(output)
    end
 
@@ -875,22 +643,7 @@ local function transform(m, util)
 	  local util = util or get_utilization(cur) or { 0, 0 }
 	  if cur.kind == 'apply' then
 		 if util[2] > util[1] then
-			local module_in = inputs[1]
-			local m = reduce_rate(cur.fn, util)
-
-			-- inline the reduced rate module
-			return m.output:visitEach(function(cur, inputs)
-				  if cur.kind == 'input' then
-					 return module_in
-				  elseif cur.kind == 'apply' then
-					 return R.connect{
-						input = inputs[1],
-						toModule = cur.fn
-					 }					 
-				  elseif cur.kind == 'concat' then
-					 return R.concat(inputs)
-				  end
-			end)
+			return inline(reduce_rate(cur.fn, util), inputs[1])
 		 else
 			return R.connect{
 			   input = inputs[1],
