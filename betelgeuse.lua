@@ -1,1 +1,1 @@
-/home/hofstee/research/betelgeuse/init.lua
+betelgeuse/init.lua

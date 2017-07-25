@@ -13,9 +13,20 @@ uninstall:
 
 .PHONY: rigel
 rigel:
-	ln -s betelgeuse.lua rigel/examples/betelgeuse.lua
-	ln -s betelgeuse rigel/examples/betelgeuse
-	ln -s examples/* rigel/examples/
+	ln -rs betelgeuse.lua rigel/examples/betelgeuse.lua
+	ln -rs betelgeuse rigel/examples/betelgeuse
+	ln -rs examples/* rigel/examples/
+
+.PHONY: rigel-clean
+rigel-clean:
+	unlink rigel/examples/betelgeuse.lua
+	unlink rigel/examples/betelgeuse
+	# unlink rigel/examples/*.lua
+
+.PHONY:derp
+derp:
+	# echo 
+	# $(foreach dir,'examples',$(wildcard $(dir).*))
 
 clean:
 	rm -rf out/*
