@@ -4,6 +4,8 @@ local rtypes = require 'types'
 local memoize = require 'memoize'
 local L = require 'betelgeuse.lang'
 
+local _VERBOSE = false
+
 local translate = {}
 local translate_mt = {
    __call = function(t, m)

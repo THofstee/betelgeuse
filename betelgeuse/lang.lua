@@ -1,5 +1,6 @@
 --- A high level language for Rigel.
 -- @module lang
+require 'betelgeuse.util'
 local asdl = require 'asdl'
 local List = asdl.List
 

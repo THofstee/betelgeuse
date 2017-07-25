@@ -37,8 +37,10 @@ res = P.peephole(res)
 print('--- Peephole ---')
 P.rates(res)
 
+-- print(res:toVerilog())
+
 R.harness{
    fn = res,
-   inFile = "rigel/examples/box_32.raw", inSize = im_size,
+   inFile = "box_32.raw", inSize = im_size,
    outFile = "updown", outSize = im_size
 }

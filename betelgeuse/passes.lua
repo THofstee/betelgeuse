@@ -20,7 +20,7 @@ local P = {}
 
 P.translate = require 'betelgeuse.passes.translate'
 
-local _VERBOSE = _VERBOSE or false
+local _VERBOSE = false
 
 local function is_handshake(t)
    if t:isNamed() and t.generator == 'Handshake' then
