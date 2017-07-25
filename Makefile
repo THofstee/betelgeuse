@@ -11,6 +11,7 @@ uninstall:
 	# rm -f $(LUA_SHAREDIR)/betelgeuse.lua
 	rm -rf $(LUA_SHAREDIR)/betelgeuse
 
+.PHONY: rigel
 rigel:
 	ln -s betelgeuse.lua rigel/examples/betelgeuse.lua
 	ln -s betelgeuse rigel/examples/betelgeuse
