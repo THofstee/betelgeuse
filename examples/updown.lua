@@ -1,11 +1,12 @@
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
+local R = require 'rigelSimple'
 
 -- map -> upsample -> map -> downsample -> map
 local x = L.input(L.uint8())
 local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
 
-local im_size = { 2, 4 }
+local im_size = { 32, 32 }
 local x0 = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local x1 = L.map(add_c)(x0)
 local x2 = L.upsample(2, 1)(x1)
@@ -36,3 +37,8 @@ res = P.peephole(res)
 print('--- Peephole ---')
 P.rates(res)
 
+R.harness{
+   fn = res,
+   inFile = "rigel/examples/box_32.raw", inSize = im_size,
+   outFile = "updown", outSize = im_size
+}
