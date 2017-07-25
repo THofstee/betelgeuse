@@ -2,6 +2,11 @@
 dbg/*
 doc/*
 out/*
+examples/*.raw
+examples/Makefile
+examples/out
+misc
+platform
 
 ;; Lua
 luacov.*

@@ -13,15 +13,10 @@ uninstall:
 
 .PHONY: rigel
 rigel:
-	ln -rs betelgeuse.lua rigel/examples/betelgeuse.lua
-	ln -rs betelgeuse rigel/examples/betelgeuse
-	ln -rs examples/* rigel/examples/
-
-.PHONY: rigel-clean
-rigel-clean:
-	unlink rigel/examples/betelgeuse.lua
-	unlink rigel/examples/betelgeuse
-	# unlink rigel/examples/*.lua
+	ln -frs rigel/examples/makefile examples/Makefile
+	ln -frs rigel/examples/*.raw examples
+	ln -frs rigel/misc misc
+	ln -frs rigel/platform platform
 
 .PHONY:derp
 derp:
