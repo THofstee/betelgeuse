@@ -17,11 +17,14 @@ rigel:
 	ln -frs rigel/examples/*.raw examples
 	ln -frs rigel/misc misc
 	ln -frs rigel/platform platform
+	mkdir examples/out
 
-.PHONY:derp
-derp:
-	# echo 
-	# $(foreach dir,'examples',$(wildcard $(dir).*))
+.PHONY: rigel-clean
+rigel-clean:
+	rm -f examples/Makefile
+	rm -f examples/*.raw
+	rm -rf misc
+	rm -rf platform
 
 clean:
 	rm -rf out/*

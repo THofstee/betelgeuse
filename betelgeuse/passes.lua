@@ -429,11 +429,17 @@ function reduce_rate.upsample(m, util)
    		 scale = { m.scaleX, m.scaleY }
    	  }
    else
-   	  m = R.modules.upsample{
-   		 type = m.type,
-   		 size = in_size,
-   		 scale = { m.scaleX, m.scaleY }
-   	  }
+	  -- @todo: only works in the x dimension
+	  m = RM.broadcastWide(
+		 m.type,
+		 1,
+		 m.scaleX
+	  )
+   	  -- m = R.modules.upsample{
+   	  -- 	 type = m.type,
+   	  -- 	 size = in_size,
+   	  -- 	 scale = { m.scaleX, m.scaleY }
+   	  -- }
    end
    
    local inter = R.connect{
