@@ -16,7 +16,7 @@ local x5 = L.map(add_c)(x4)
 local mod = L.lambda(x5, x0)
 
 -- utilization
-local elem_rate = { 1, 4 }
+local elem_rate = { 1, 1 }
 local util = P.reduction_factor(mod, elem_rate)
 
 -- passes

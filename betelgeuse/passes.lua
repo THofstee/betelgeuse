@@ -430,10 +430,10 @@ function reduce_rate.upsample(m, util)
    	  }
    else
 	  -- @todo: only works in the x dimension
-	  m = RM.broadcastWide(
+	  m = C.broadcast(
 		 m.type,
-		 1,
-		 m.scaleX
+		 m.scaleX,
+		 1
 	  )
    	  -- m = R.modules.upsample{
    	  -- 	 type = m.type,
@@ -446,6 +446,8 @@ function reduce_rate.upsample(m, util)
 	  input = in_rate,
 	  toModule = R.HS(m)
    }
+
+   print(m.outputType)
 
    local output = change_rate(inter, out_size)
 
