@@ -23,7 +23,7 @@ before_install:
 install:
   - mkdir out
   - ls
-  - $LUA examples/updown.lua
+  - $(LUA) examples/updown.lua
 
 script:
   - busted -c
