@@ -447,7 +447,7 @@ function reduce_rate.upsample(m, util)
    -- @todo: hack
    in_size[2] = math.max(1, in_size[2]/util[2])
    in_size[1] = math.max(1, in_size[1]/(util[2]/(m.inputType.size[2]/in_size[2])))
-   if par ~= 1 then in_size[1] = par*in_size[1] end
+   if par ~= 1 then in_size[1] = 2*in_size[1] end
 
    local in_rate = change_rate(input, in_size)
 
@@ -464,8 +464,6 @@ function reduce_rate.upsample(m, util)
 	  toModule = R.HS(m)
    }
 
-   print(inspect(m, {depth = 2}))
-   
    local output = change_rate(inter, out_size)
 
    return R.defineModule{
