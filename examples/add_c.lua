@@ -1,4 +1,3 @@
-local inspect = require 'inspect'
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 
