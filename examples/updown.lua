@@ -41,6 +41,7 @@ P.rates(res)
 
 R.harness{
    fn = res,
+   backend = "verilog",
    inFile = "box_32.raw", inSize = im_size,
-   outFile = "updown", outSize = im_size
+   outFile = "updown", outSize = im_size,
 }
