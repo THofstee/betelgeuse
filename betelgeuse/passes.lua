@@ -196,8 +196,10 @@ P.to_handshake = to_handshake
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
 local function streamify(m, elem_rate)
+   -- elem rate := { n_pixels, every_m_cycles }
    local elem_rate = elem_rate or { 1, 1 }
-   local elem_size = math.max(elem_rate[1]/elem_rate[2], 1)
+   local elem_size = elem_rate[1]
+   local elem_rate = { 1, elem_rate[2] }
 
    local t_in, w_in, h_in
    if is_handshake(m.inputType) then
@@ -431,9 +433,9 @@ function reduce_rate.upsample(m, util)
    else
 	  -- @todo: only works in the x dimension
 	  m = C.broadcast(
-		 m.type,
-		 m.scaleX,
-		 1
+	  	 m.type,
+	  	 m.scaleX,
+	  	 1
 	  )
    	  -- m = R.modules.upsample{
    	  -- 	 type = m.type,
@@ -634,6 +636,8 @@ P.get_name = get_name
 
 -- @todo: maybe this should only take in a lambda as input
 local function transform(m, util)
+   local m = to_handshake(m)
+   
    local output
    if m.kind == 'lambda' then
 	  output = m.output
@@ -660,12 +664,6 @@ local function transform(m, util)
 		 end
 	  elseif cur.kind == 'concat' then
 		 return R.concat(inputs)
-	  elseif cur.kind == 'input' then
-		 if is_handshake(cur.type) then
-			return cur
-		 else
-			return R.input(R.HS(cur.type))
-		 end
 	  end
 
 	  return cur

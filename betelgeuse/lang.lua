@@ -16,9 +16,9 @@ Type = uint(number n)
 
 Value = input(Type t)
       | const(Type t, any v)
-      | placeholder(Type t)
+#      | placeholder(Type t)
       | concat(Value* vs) # @todo: it might be nice if i can index this with [n]
-#      | split(Value v) # @todo: does this need to exist?
+#      | index(Value v) # @todo: does this need to exist?
       | apply(Module m, Value v)
       attributes(Type type)
 
@@ -33,8 +33,9 @@ Module = mul
        | upsample(number x, number y)
        | downsample(number x, number y)
 # @todo: try to figure out how to remove broadcast entirely, or at least w/h
-       | broadcast(number w, number h) # @todo: what about 1d broadcast?
+       | broadcast(number w, number h)
 # @todo: consider changing multiply etc to use the lift feature and lift systolic
+# @todo: if we had lift, then there wouldn't be a need for streamify in the high level language?
 #       | lift # @todo: this should raise rigel modules into this language
        | lambda(Value f, input x)
        attributes(function type_func)
@@ -259,10 +260,10 @@ function L.input(t)
    return T.input(t, t)
 end
 
---- Creates a 1d array type.
-function L.array(t, n)
-   return T.array2d(t, n, 1)
-end
+-- --- Creates a 1d array type.
+-- function L.array(t, n)
+--    return T.array2d(t, n, 1)
+-- end
 
 --- Creates a 2d array type.
 function L.array2d(t, w, h)
@@ -271,9 +272,7 @@ end
 
 --- Creates a tuple type given any number of types.
 function L.tuple(...)
-   if List:isclassof(...) then
-	  return T.tuple(...)
-   elseif #{...} == 1 then
+   if #{...} == 1 then
 	  return T.tuple(List(...))
    else
 	  return T.tuple(List{...})
@@ -292,13 +291,13 @@ function L.uint8()
 end
 -- L.uint8 = T.uint(8)
 
---- A placeholder that can be replaced later.
--- This might be needed for feedback loops.
--- @todo: figure out if this is actually needed.
--- @tparam Type t the type of the placeholder
-function L.placeholder(t)
-   return T.placeholder(t, t)
-end
+-- --- A placeholder that can be replaced later.
+-- -- This might be needed for feedback loops.
+-- -- @todo: figure out if this is actually needed.
+-- -- @tparam Type t the type of the placeholder
+-- function L.placeholder(t)
+--    return T.placeholder(t, t)
+-- end
 
 --- Concatenates any number of values.
 function L.concat(...)
