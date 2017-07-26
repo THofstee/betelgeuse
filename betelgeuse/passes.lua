@@ -60,6 +60,37 @@ function reduction_factor(m, in_rate)
 end
 P.reduction_factor = reduction_factor
 
+local function get_input(m)
+   while m.inputs[1] do
+	  m = m.inputs[1]
+   end
+   return m
+end
+P.get_input = get_input
+
+local function get_name(m)
+   if m.kind == 'lambda' then
+	  return m.kind .. '(' .. get_name(m.output) .. ')'
+   elseif m.name then
+	  if m.fn then
+		 return m.kind .. '_' .. m.name .. '(' .. get_name(m.fn) .. ')'
+	  elseif m.kind == 'input' then
+		 return m.kind .. '_' .. m.name .. '(' .. tostring(m.type) .. ')'
+	  else
+		 return m.name
+	  end
+   else
+	  if m.fn then
+		 return m.kind .. '(' .. get_name(m.fn) .. ')'
+	  elseif m.kind == 'input' then
+		 return m.kind .. '(' .. tostring(m.type) .. ')'
+	  else
+		 return m.kind
+	  end
+   end
+end
+P.get_name = get_name
+
 local function change_rate(input, out_size)
    local t = input.type
    if is_handshake(t) then
@@ -406,51 +437,35 @@ function reduce_rate.upsample(m, util)
    -- @todo: change to be upsampleY first then upsampleX, once implemented
    local input = R.input(R.HS(m.inputType))
 
-   -- @todo: divide by util to figure out input element type
+   -- @todo: divide by util to figure out output element type
    -- @todo: sample for downsample
+   local out_size = m.outputType.size
+   local par = math.max(1, out_size[1]*out_size[2] * util[1]/util[2])
    local in_size = { m.inputType.size[1], m.inputType.size[2] }
+
    -- @todo: reduce in x first or in y first?
    -- @todo: hack
    in_size[2] = math.max(1, in_size[2]/util[2])
    in_size[1] = math.max(1, in_size[1]/(util[2]/(m.inputType.size[2]/in_size[2])))
+   if par ~= 1 then in_size[1] = par*in_size[1] end
 
    local in_rate = change_rate(input, in_size)
 
-   -- @todo: divide by util to figure out output element type
-   -- @todo: sample for downsample
-   local out_size = m.outputType.size
-
-   local par = math.max(1, out_size[1]*out_size[2] * util[1]/util[2])
-
    -- @todo: this is not scanline order anymore really
-   if par == 1 then
-   	  m = R.modules.upsampleSeq{
-   		 type = m.type, -- A
-   		 V = par, -- T
-   		 size = { m.width, m.height },
-   		 scale = { m.scaleX, m.scaleY }
-   	  }
-   else
-	  -- @todo: only works in the x dimension
-	  m = C.broadcast(
-	  	 m.type,
-	  	 m.scaleX,
-	  	 1
-	  )
-   	  -- m = R.modules.upsample{
-   	  -- 	 type = m.type,
-   	  -- 	 size = in_size,
-   	  -- 	 scale = { m.scaleX, m.scaleY }
-   	  -- }
-   end
-   
+   m = R.modules.upsampleSeq{
+	  type = m.type,
+	  V = par,
+	  size = { m.width, m.height },
+	  scale = { m.scaleX, m.scaleY }
+   }
+
    local inter = R.connect{
 	  input = in_rate,
 	  toModule = R.HS(m)
    }
 
-   print(m.outputType)
-
+   print(inspect(m, {depth = 2}))
+   
    local output = change_rate(inter, out_size)
 
    return R.defineModule{
@@ -611,29 +626,6 @@ function reduce_rate.constSeq(m, util)
 end
 reduce_rate.constSeq = memoize(reduce_rate.constSeq)
 
-local function get_input(m)
-   while m.inputs[1] do
-	  m = m.inputs[1]
-   end
-   return m
-end
-P.get_input = get_input
-
-local function get_name(m)
-   if m.kind == 'lambda' then
-	  return m.kind .. '(' .. get_name(m.output) .. ')'
-   elseif m.fn then
-	  return m.kind .. '(' .. get_name(m.fn) .. ')'
-   elseif m.kind == 'input' then
-	  return m.kind .. '(' .. tostring(m.type) .. ')'
-   elseif m.name then
-	  return m.kind .. '_' .. m.name
-   else
-	  return m.kind
-   end
-end
-P.get_name = get_name
-
 -- @todo: maybe this should only take in a lambda as input
 local function transform(m, util)
    local m = to_handshake(m)
@@ -684,9 +676,15 @@ end
 P.transform = transform
 
 local function base(m)
-   if m.kind == 'lambda' then
-	  return base(m.output)
-   elseif m.fn then
+   local ignored = {
+	  apply = true,
+	  makeHandshake = true,
+	  liftHandshake = true,
+	  liftDecimate = true,
+	  waitOnInput = true,
+   }
+
+   if m.fn and ignored[m.kind] then
 	  return base(m.fn)
    else
 	  return m
