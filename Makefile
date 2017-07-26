@@ -17,7 +17,7 @@ rigel:
 	ln -frs rigel/examples/*.raw examples
 	ln -frs rigel/misc misc
 	ln -frs rigel/platform platform
-	mkdir examples/out
+	mkdir -p examples/out
 
 .PHONY: rigel-clean
 rigel-clean:
