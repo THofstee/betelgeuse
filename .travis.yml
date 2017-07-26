@@ -21,7 +21,9 @@ before_install:
   - git submodule update --init
 
 install:
+  - ls
   - mkdir out
+  - luajit examples/updown.lua
 
 script:
   - busted -c
