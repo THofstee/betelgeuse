@@ -196,8 +196,8 @@ P.to_handshake = to_handshake
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
 local function streamify(m, elem_rate)
-   local elem_size = elem_rate or { 1, 1 }
-   elem_size = math.max(elem_size[1]/elem_size[2], 1)
+   local elem_rate = elem_rate or { 1, 1 }
+   local elem_size = math.max(elem_rate[1]/elem_rate[2], 1)
 
    local t_in, w_in, h_in
    if is_handshake(m.inputType) then
