@@ -21,7 +21,7 @@ before_install:
   - git submodule update --init
 
 install:
-  - mkdir examples/out
+  - mkdir out
 
 script:
   - busted -c
