@@ -447,7 +447,7 @@ function reduce_rate.upsample(m, util)
    -- @todo: hack
    in_size[2] = math.max(1, in_size[2]/util[2])
    in_size[1] = math.max(1, in_size[1]/(util[2]/(m.inputType.size[2]/in_size[2])))
-   if par ~= 1 then in_size[1] = 2*in_size[1] end
+   if par ~= 1 then in_size[1] = m.scaleX*m.scaleY*in_size[1] end
 
    local in_rate = change_rate(input, in_size)
 
@@ -483,36 +483,24 @@ function reduce_rate.downsample(m, util)
 
    local out_size = m.outputType.size
 
-   -- @todo: this is not scanline order anymore really
-   m = RM.downsampleXSeq(
-	  m.type,
-	  m.width,
-	  m.height,
-	  par,
-	  m.scaleX
-   )
-   -- if par == 1 then
-   -- 	  m = RM.downsampleXSeq(
-   -- 		 m.type,
-   -- 		 m.width,
-   -- 		 m.height,
-   -- 		 par,
-   -- 		 m.scaleX
-   -- 	  )
-   -- 	  -- m = R.modules.downsampleSeq{
-   -- 	  -- 	 type = m.type,
-   -- 	  -- 	 V = 1,
-   -- 	  -- 	 size = { m.width, m.height },
-   -- 	  -- 	 scale = { m.scaleX, m.scaleY }
-   -- 	  -- }
-   -- else
-   -- 	  m = R.modules.downsample{
-   -- 		 type = m.type,
-   -- 		 size = { par, 1 },
-   -- 		 scale = { m.scaleX, m.scaleY }
-   -- 	  }
-   -- end
-   
+   if m.scaleY == 1 then
+	  m = RM.downsampleXSeq(
+		 m.type,
+		 m.width,
+		 m.height,
+		 par,
+		 m.scaleX
+	  )
+   else
+	  -- @todo: for some reason this is super slow when scaleY == 1
+	  m = R.modules.downsampleSeq{
+		 type = m.type,
+		 V = par,
+		 size = { m.width, m.height },
+		 scale = { m.scaleX, m.scaleY }
+	  }
+   end
+      
    local inter = R.connect{
 	  input = in_rate,
 	  toModule = R.HS(m)
