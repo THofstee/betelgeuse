@@ -294,6 +294,27 @@ local function streamify(m, elem_rate)
 end
 P.streamify = streamify
 
+-- @todo: rename function
+-- @todo: change to take in max_rate and util instead
+local function divisor(n, k)
+   -- find the smallest divisor of n greater than k
+   for i=k,math.floor(math.sqrt(n)) do
+	  if n%i == 0 then
+		 return i
+	  end
+   end
+
+   -- find the greatest divisor of n smaller than k
+   for i in k,2,-1 do
+	  if n%i == 0 then
+		 return i
+	  end
+   end
+
+   -- couldn't find anything better, return 1
+   return 1
+end
+
 local reduce_rate = {}
 local reduce_rate_mt = {
    __call = function(t, m, util)
@@ -322,16 +343,17 @@ function reduce_rate.map(m, util)
    local h = m.H
 
    local max_reduce = w*h
-   local parallelism = math.ceil(max_reduce * util[1]/util[2])
+   local par = math.ceil(max_reduce * util[1]/util[2])
+   par = divisor(max_reduce, par)
 
    local input = R.input(R.HS(t))
    
-   local in_rate = change_rate(input, { parallelism, 1 })
+   local in_rate = change_rate(input, { par, 1 })
 
    -- @todo: the module being mapped over probably also needs to be optimized, for example recursive maps
    m = R.modules.map{
 	  fn = m.fn,
-	  size = { parallelism }
+	  size = { par }
    }
 
    local inter = R.connect{
@@ -392,6 +414,7 @@ function reduce_rate.pad(m, util)
 
    local max_reduce = out_size[1]*out_size[2]
    local par = math.ceil(max_reduce * util[1]/util[2])
+   par = divisor(max_reduce, par)
    
    local input = R.input(R.HS(t))
    
@@ -427,15 +450,16 @@ function reduce_rate.crop(m, util)
    local out_size = m.outputType.size
 
    local max_reduce = w*h
-   local parallelism = math.ceil(max_reduce * util[1]/util[2])
+   local par = math.ceil(max_reduce * util[1]/util[2])
+   par = divisor(max_reduce, par)
    
    local input = R.input(R.HS(t))
    
-   local in_rate = change_rate(input, { parallelism, 1 })
+   local in_rate = change_rate(input, { par, 1 })
    
    m = R.modules.cropSeq{
 	  type = m.type,
-	  V = parallelism,
+	  V = par,
 	  size = { w, h },
 	  crop = { m.L, m.R, m.Top, m.B }
    }
@@ -548,6 +572,7 @@ function reduce_rate.stencil(m, util)
    local size = { m.w, m.h }
 
    local par = math.ceil(size[1]*size[2] * util[1]/util[2])
+   par = divisor(size[1]*size[2], par)
 
    local m2 = R.modules.linebuffer{
 	  type = m.inputType.over,

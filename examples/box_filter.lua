@@ -15,7 +15,7 @@ local util = P.reduction_factor(mod, elem_size)
 
 local res
 res = P.translate(mod)
--- res = P.transform(res, util)
+res = P.transform(res, util)
 res = P.streamify(res, elem_size)
 res = P.peephole(res)
 print('--- Peephole ---')
