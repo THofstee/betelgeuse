@@ -44,7 +44,6 @@ P.rates(res)
 
 R.harness{
    fn = res,
-   -- backend = "verilog",
    inFile = "box_32.raw", inSize = in_size,
    outFile = "updown", outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles

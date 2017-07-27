@@ -1,8 +1,9 @@
 local lfs = require 'lfs'
 local dir = lfs.currentdir() .. '/examples/'
 
-for i,a in ipairs(arg) do
-   print('ARG[' .. i .. ']: ' .. a)
+-- hopefully this doesn't break busted
+for i,_ in ipairs(arg) do
+   arg[i] = nil
 end
 
 describe('tests in the examples directory', function()
