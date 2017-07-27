@@ -16,6 +16,10 @@ local L = require 'betelgeuse.lang'
 -- @todo: remove this after debugging
 local inspect = require 'inspect'
 
+function linenum()
+   return debug.getinfo(2, 'l').currentline
+end
+
 local P = {}
 
 P.translate = require 'betelgeuse.passes.translate'
@@ -39,6 +43,24 @@ local function unwrap_handshake(m)
 	  return m
    end
 end
+
+local function base(m)
+   local ignored = {
+	  apply = true,
+	  makeHandshake = true,
+	  liftHandshake = true,
+	  liftDecimate = true,
+	  waitOnInput = true,
+   }
+
+   if m.fn and ignored[m.kind] then
+	  return base(m.fn)
+   else
+	  return m
+   end
+end
+
+P.base = base
 
 -- @todo: should make this a class method in lang
 function reduction_factor(m, in_rate)
@@ -147,6 +169,7 @@ local function change_rate(input, out_size)
 end
 P.change_rate = change_rate
 
+-- @todo: split body in to inline_cur and then use inline_cur in other places?
 local function inline(m, input)
    return m.output:visitEach(function(cur, inputs)
    		 if cur.kind == 'input' then
@@ -299,8 +322,7 @@ function reduce_rate.map(m, util)
    local h = m.H
 
    local max_reduce = w*h
-   -- @todo: should this be floor or ceil?
-   local parallelism = math.max(1, math.floor(max_reduce * util[1]/util[2]))
+   local parallelism = math.ceil(max_reduce * util[1]/util[2])
 
    local input = R.input(R.HS(t))
    
@@ -327,7 +349,7 @@ end
 reduce_rate.map = memoize(reduce_rate.map)
 
 function reduce_rate.SoAtoAoS(m, util)
-   -- @todo: implement
+   print('@todo: implement', linenum())
    local t = m.inputType
 
    local input = R.input(R.HS(t))
@@ -368,16 +390,16 @@ function reduce_rate.pad(m, util)
    local h = m.height
    local out_size = m.outputType.size
 
-   local max_reduce = w*h
-   local parallelism = max_reduce * util[1]/util[2]
+   local max_reduce = out_size[1]*out_size[2]
+   local par = math.ceil(max_reduce * util[1]/util[2])
    
    local input = R.input(R.HS(t))
    
-   local in_rate = change_rate(input, { parallelism, 1 })
+   local in_rate = change_rate(input, { par, 1 })
    
    m = R.modules.padSeq{
 	  type = m.type,
-	  V = parallelism,
+	  V = par,
 	  size = { w, h },
 	  pad = { m.L, m.R, m.Top, m.B },
 	  value = m.value
@@ -405,8 +427,7 @@ function reduce_rate.crop(m, util)
    local out_size = m.outputType.size
 
    local max_reduce = w*h
-   -- @todo: floor or ceil?
-   local parallelism = math.floor(max_reduce * util[1]/util[2])
+   local parallelism = math.ceil(max_reduce * util[1]/util[2])
    
    local input = R.input(R.HS(t))
    
@@ -440,13 +461,13 @@ function reduce_rate.upsample(m, util)
    -- @todo: divide by util to figure out output element type
    -- @todo: sample for downsample
    local out_size = m.outputType.size
-   local par = math.max(1, out_size[1]*out_size[2] * util[1]/util[2])
+   local par = math.ceil(out_size[1]*out_size[2] * util[1]/util[2])
    local in_size = { m.inputType.size[1], m.inputType.size[2] }
 
    -- @todo: reduce in x first or in y first?
    -- @todo: hack
-   in_size[2] = math.max(1, in_size[2]/util[2])
-   in_size[1] = math.max(1, in_size[1]/(util[2]/(m.inputType.size[2]/in_size[2])))
+   in_size[2] = math.ceil(in_size[2]/util[2])
+   in_size[1] = math.ceil(in_size[1]/(util[2]/(m.inputType.size[2]/in_size[2])))
    if par ~= 1 then in_size[1] = m.scaleX*m.scaleY*in_size[1] end
 
    local in_rate = change_rate(input, in_size)
@@ -477,7 +498,7 @@ function reduce_rate.downsample(m, util)
    local input = R.input(R.HS(m.inputType))
 
    local in_size = m.inputType.size
-   local par = math.max(1, in_size[1]*in_size[2] * util[1]/util[2])
+   local par = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
    
    local in_rate = change_rate(input, { par, 1 })
 
@@ -516,7 +537,7 @@ end
 reduce_rate.downsample = memoize(reduce_rate.downsample)
 
 function reduce_rate.stencil(m, util)
-   -- @todo: implement
+   print('@todo: implement', linenum())
 
    -- @todo: hack, should move this to translate probably
    m.xmin = m.xmin - m.xmax
@@ -526,9 +547,11 @@ function reduce_rate.stencil(m, util)
 
    local size = { m.w, m.h }
 
+   local par = math.ceil(size[1]*size[2] * util[1]/util[2])
+
    local m2 = R.modules.linebuffer{
 	  type = m.inputType.over,
-	  V = 1,
+	  V = par,
 	  size = size,
 	  stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
    }
@@ -538,7 +561,7 @@ function reduce_rate.stencil(m, util)
 
    local input = R.input(m.inputType)
 
-   local in_rate = change_rate(input, { 1, 1 })
+   local in_rate = change_rate(input, { par, 1 })
 
    local inter = R.connect{
 	  input = in_rate,
@@ -595,15 +618,18 @@ end
 reduce_rate.lambda = memoize(reduce_rate.lambda)
 
 function reduce_rate.constSeq(m, util)
-   -- @todo: implement
+   print('@todo: implement', linenum())
    local m = R.HS(m)
 
    local input = R.input(m.inputType)
 
    local output = R.connect{
 	  input = input,
-	  toModule = m
+	  toModule = m,
+	  util = { util }
    }
+
+   print(inspect(util))
    
    return R.defineModule{
 	  input = input,
@@ -660,24 +686,6 @@ local function transform(m, util)
    end   
 end
 P.transform = transform
-
-local function base(m)
-   local ignored = {
-	  apply = true,
-	  makeHandshake = true,
-	  liftHandshake = true,
-	  liftDecimate = true,
-	  waitOnInput = true,
-   }
-
-   if m.fn and ignored[m.kind] then
-	  return base(m.fn)
-   else
-	  return m
-   end
-end
-
-P.base = base
 
 -- @todo: maybe this should only take in a lambda as input
 local function peephole(m)
@@ -823,8 +831,6 @@ end
 
 local function handshakes(m)
    -- @todo: this function shouldn't crash if it can't remove HS, it should just return the original pipeline. need to add another case in cur.kind i think
-   local RS = require 'rigelSimple'
-   local R = require 'rigel'
 
    -- Remove handshakes on everything as we iterate
    local function removal(cur, inputs)
@@ -834,20 +840,20 @@ local function handshakes(m)
 			return cur
 		 elseif inputs[1].type.generator == 'Handshake' then
 			-- Something earlier failed, so don't remove handshake here
-			return RS.connect{
+			return R.connect{
 			   input = inputs[1],
 			   toModule = cur.fn
 			}
 		 else
 			-- Our input isn't handshaked, so remove handshake if we need to
 			if cur.fn.kind == 'makeHandshake' then
-			   return RS.connect{
+			   return R.connect{
 				  input = inputs[1],
 				  toModule = cur.fn.fn
 			   }
 			end
 
-			return RS.connect{
+			return R.connect{
 			   input = inputs[1],
 			   toModule = cur.fn
 			}
@@ -855,7 +861,7 @@ local function handshakes(m)
 	  elseif cur.kind == 'input' then
 		 -- Start by removing handshake on all inputs
 		 if cur.type.generator == 'Handshake' then
-			return RS.input(cur.type.params.A)
+			return R.input(cur.type.params.A)
 		 end
 	  end
 	  return cur
@@ -865,7 +871,7 @@ local function handshakes(m)
 	  local output = m.output:visitEach(removal)
 	  local input = get_input(output)
 	  
-	  return RS.defineModule{
+	  return R.defineModule{
 		 input = input,
 		 output = output
 	  }

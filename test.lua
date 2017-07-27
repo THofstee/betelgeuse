@@ -1,6 +1,6 @@
 local inspect = require 'inspect'
-local L = require 'lang'
-local P = require 'passes'
+local L = require 'betelgeuse.lang'
+local P = require 'betelgeuse.passes'
 --[[
    tests with rigel
 --]]
@@ -37,16 +37,6 @@ local m = L.map(L.add())(ij)
 
 -- L.apply(make_lambda(function(x) return L.concat(x, L.const(L.uint8(), 30)) end), L.input(L.uint8()))
 
--- box filter
-local im_size = { 16, 32 }
-local pad_size = { im_size[1]+16, im_size[2]+3 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local pad = L.pad(8, 8, 2, 1)(I)
-local st = L.stencil(-1, -1, 4, 4)(pad)
-local conv = L.map(L.reduce(L.add()))
-local m = L.crop(8, 8, 2, 1)(conv(st))
-local mod = L.lambda(m, I)
-
 -- -- box filter conv (fork)
 -- local im_size = { 16, 32 }
 -- local pad_size = { im_size[1]+16, im_size[2]+3 }
@@ -67,17 +57,13 @@ local mod = L.lambda(m, I)
 -- -- One interleaved input, fork into multi-rate for one branch, then join
 -- local I = L.input(L.array2d(L.array(L.uint8(), 2), 16, 16))
 
+local elem_size = { 1, 1 }
+local util = P.reduction_factor(mod, elem_size)
 
 local res
 res = P.translate(mod)
-print('--- Translate ---')
-P.rates(res)
-res = P.streamify(res)
-print('--- Streamify ---')
-P.rates(res)
-res = P.transform(res)
-print('--- Transform ---')
-P.rates(res)
+res = P.transform(res, util)
+res = P.streamify(res, elem_size)
 res = P.peephole(res)
 print('--- Peephole ---')
 P.rates(res)

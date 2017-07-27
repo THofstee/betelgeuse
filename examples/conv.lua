@@ -24,9 +24,8 @@ local util = P.reduction_factor(mod, elem_size)
 -- passes
 local res
 res = P.translate(mod)
-res = P.to_handshake(res)
-res = P.transform(res)
--- res = P.streamify(res) -- @todo: this is broken
-res = P.peephole(res)
-print('--- Peephole ---')
-P.rates(res)
+-- res = P.transform(res, util)
+-- res = P.streamify(res, elem_size)
+-- res = P.peephole(res)
+-- print('--- Peephole ---')
+-- P.rates(res)
