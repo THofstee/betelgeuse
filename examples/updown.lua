@@ -44,4 +44,5 @@ R.harness{
    -- backend = "verilog",
    inFile = "box_32.raw", inSize = im_size,
    outFile = "updown", outSize = im_size,
+   earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }
