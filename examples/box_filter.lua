@@ -26,8 +26,8 @@ print('--- Peephole ---')
 P.rates(res)
 
 R.harness{
-   fn = res,
-   inFile = "box_32.raw", inSize = in_size,
+   fn = P.to_handshake(res),
+   inFile = "impulse_32.raw", inSize = in_size,
    outFile = "box_filter", outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }

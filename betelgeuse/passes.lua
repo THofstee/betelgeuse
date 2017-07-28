@@ -545,7 +545,7 @@ function reduce_rate.downsample(m, util)
 		 scale = { m.scaleX, m.scaleY }
 	  }
    end
-      
+   
    local inter = R.connect{
 	  input = in_rate,
 	  toModule = R.HS(m)
@@ -564,11 +564,12 @@ function reduce_rate.stencil(m, util)
    print('@todo: implement', linenum())
 
    -- @todo: hack, should move this to translate probably
+   -- @todo: total hack, needs extra pad and crop
    m.xmin = m.xmin - m.xmax
    m.xmax = 0
    m.ymin = m.ymin - m.ymax
    m.ymax = 0
-
+   
    local size = { m.w, m.h }
 
    local par = math.ceil(size[1]*size[2] * util[1]/util[2])

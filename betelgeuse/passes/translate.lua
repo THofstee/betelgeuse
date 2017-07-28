@@ -125,7 +125,7 @@ function translate.pad(m)
    return R.modules.pad{
 	  type = arr_t,
 	  size = { w, h },
-	  pad = { m.left, m.right, m.top, m.bottom },
+	  pad = { m.left, m.right, m.bottom, m.top },
 	  value = 0
    }
 end
@@ -139,7 +139,7 @@ function translate.crop(m)
    return R.modules.crop{
 	  type = arr_t,
 	  size = { w, h },
-	  crop = { m.left, m.right, m.top, m.bottom },
+	  crop = { m.left, m.right, m.bottom, m.top },
 	  value = 0
    }
 end
