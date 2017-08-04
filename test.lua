@@ -6,23 +6,23 @@ local P = require 'betelgeuse.passes'
 --]]
 
 -- add constant to image (broadcast)
--- local im_size = { 1920, 1080 }
--- local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
--- local c = L.const(L.uint8(), 1)
--- local bc = L.broadcast(im_size[1], im_size[2])(c)
--- local m = L.map(L.add())(L.zip_rec()(L.concat(I, bc)))
+local im_size = { 1920, 1080 }
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local c = L.const(L.uint8(), 1)
+local bc = L.broadcast(im_size[1], im_size[2])(c)
+local m = L.map(L.add())(L.zip_rec()(L.concat(I, bc)))
 
 -- add constant to image (spark style syntax)
--- local im_size = { 1920, 1080 }
--- local m = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
---    :concat(L.const(L.uint8(), 1):broadcast(im_size[1], im_size[2]))
---    :zip_rec()
---    :map(L.add())
+local im_size = { 1920, 1080 }
+local m = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+   :concat(L.const(L.uint8(), 1):broadcast(im_size[1], im_size[2]))
+   :zip_rec()
+   :map(L.add())
 
--- -- add constant to image (spark stream style syntax)
--- local add_1 = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 1))), x)
--- local I = L.input(array2d(L.uint8(), 1920, 1080))
---    :map(add_1)
+-- add constant to image (spark stream style syntax)
+local add_1 = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 1))), x)
+local I = L.input(array2d(L.uint8(), 1920, 1080))
+   :map(add_1)
 
 -- @todo: add something like betel(function(I) map(f)(I) end) that will let you declare lambdas more easily
 -- @todo: add something like an extra class that when called will lower the module into rigel and give you back something
