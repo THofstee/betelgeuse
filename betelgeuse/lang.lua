@@ -43,23 +43,39 @@ Module = mul
 # Connect = connect(Value v, Value placeholder)
 ]]
 
+local function unwrap(w)
+   if type(w) == 'table' and w.kind == 'wrapped' then
+	  return w.internal
+   else
+	  return w
+   end
+end
+
 local function is_array_type(t)
    return t.kind == 'array2d'
 end
 
-local L_mt = {
+local m_mt = {
    __call = function(f, x)
 	  return L.apply(f, x)
    end
 }
 
+local v_mt = {
+   __index = function(_, f)
+	  return function(v, ...)
+		 return L.apply(L[f](...), v)
+	  end
+   end
+}
+
 -- @todo: maybe make this an element in the asdl rep?
-local function L_wrap(m)
-   return setmetatable({ internal = m, kind = 'wrapped' }, L_mt)
+local function wrap_module(m)
+   return setmetatable({ internal = m, kind = 'wrapped' }, m_mt)
 end
 
-local function L_unwrap(w)
-   return w.internal
+local function wrap_value(v)
+   return setmetatable({ internal = v, kind = 'wrapped' }, v_mt)
 end
 
 --- Returns a module that will create a stencil of the image at every input.
@@ -70,7 +86,7 @@ function L.stencil(off_x, off_y, ext_x, ext_y)
 	  return T.array2d(T.array2d(t.t, ext_x, ext_y), t.w, t.h)
    end
    
-   return L_wrap(T.stencil(off_x, off_y, ext_x, ext_y, type_func))
+   return wrap_module(T.stencil(off_x, off_y, ext_x, ext_y, type_func))
 end
 
 --- Returns a module that will duplicate the input to a 2d array.
@@ -81,7 +97,7 @@ function L.broadcast(w, h)
 	  return T.array2d(t, w, h)
    end
 
-   return L_wrap(T.broadcast(w, h, type_func))
+   return wrap_module(T.broadcast(w, h, type_func))
 end
 
 --- Returns a module that will pad the input by a specified amount.
@@ -91,7 +107,7 @@ function L.pad(left, right, top, bottom)
 	  return T.array2d(t.t, t.w+left+right, t.h+top+bottom)
    end
 
-   return L_wrap(T.pad(left, right, top, bottom, type_func))
+   return wrap_module(T.pad(left, right, top, bottom, type_func))
 end
 
 --- Returns a module that will crop the input by a specified amount.
@@ -101,7 +117,7 @@ function L.crop(left, right, top, bottom)
 	  return T.array2d(t.t, t.w-left-right, t.h-top-bottom)
    end
 
-   return L_wrap(T.crop(left, right, top, bottom, type_func))
+   return wrap_module(T.crop(left, right, top, bottom, type_func))
 end
 
 function L.upsample(x, y)
@@ -110,7 +126,7 @@ function L.upsample(x, y)
 	  return T.array2d(t.t, t.w*x, t.h*y)
    end
 
-   return L_wrap(T.upsample(x, y, type_func))
+   return wrap_module(T.upsample(x, y, type_func))
 end
 
 function L.downsample(x, y)
@@ -121,7 +137,7 @@ function L.downsample(x, y)
 	  return T.array2d(t.t, t.w/x, t.h/y)
    end
 
-   return L_wrap(T.downsample(x, y, type_func))
+   return wrap_module(T.downsample(x, y, type_func))
 end
 
 --- Returns a module that will zip two inputs together.
@@ -143,14 +159,14 @@ function L.zip()
 	  return L.array2d(L.tuple(types), w, h)
    end
 
-   return L_wrap(T.zip(type_func))
+   return wrap_module(T.zip(type_func))
 end
 
 --- Returns a module that will recursively zip inputs.
 -- Given a tuple of inputs, it will recursively apply maps of zips while all inputs share the same outer array type.
 -- For example, ([[[a]]], [[b]]) -> [[([a], b)]].
 function L.zip_rec()
-   return L_wrap(
+   return wrap_module(
 	  function(v)
 		 assert(v.type.kind == 'tuple')
 
@@ -193,24 +209,24 @@ end
 
 --- Returns a module that multiplies two primitive types.
 function L.mul()
-   return L_wrap(T.mul(binop_type_func))
+   return wrap_module(T.mul(binop_type_func))
 end
 
 --- Returns a module that adds two primitive types.
 function L.add()
-   return L_wrap(T.add(binop_type_func))
+   return wrap_module(T.add(binop_type_func))
 end
 
 --- Returns a module that is a map given a module to apply.
 function L.map(m)
-   local m = L_unwrap(m)
+   local m = unwrap(m)
    
    local function type_func(t)
 	  assert(is_array_type(t), 'map operates on arrays')
 	  return L.array2d(m.type_func(t.t), t.w, t.h)
    end
 
-   return L_wrap(T.map(m, type_func))
+   return wrap_module(T.map(m, type_func))
 end
 
 --- Returns a module that is a sequence of modules being applied,
@@ -221,7 +237,7 @@ function L.chain(...)
 	  ms[i] = m
    end
    
-   return L_wrap(
+   return wrap_module(
 	  function(v)
 		 for _,m in ipairs(ms) do
 			v = L.apply(m, v)
@@ -234,30 +250,31 @@ end
 --- Returns a module that is a reduce given the provided module.
 -- This is implemented using a tree-reduction.
 function L.reduce(m)
-   local m = L_unwrap(m)
+   local m = unwrap(m)
    
    local function type_func(t)
 	  assert(is_array_type(t), 'reduce operates on arrays')
 	  return m.type_func(L.tuple(t.t, t.t))
    end
 
-   return L_wrap(T.reduce(m, type_func))
+   return wrap_module(T.reduce(m, type_func))
 end
 
 --- Applies the module on the provided value.
 function L.apply(m, v)
-   local m = L_unwrap(m)
+   local m = unwrap(m)
+   local v = unwrap(v)
 
    if type(m) == 'function' then
-	  return m(v)
+	  return wrap_value(m(v))
    else
-	  return T.apply(m, v, m.type_func(v.type))
+	  return wrap_value(T.apply(m, v, m.type_func(v.type)))
    end
 end
 
 --- Creates an input value given a type.
 function L.input(t)
-   return T.input(t, t)
+   return wrap_value(T.input(t, t))
 end
 
 -- --- Creates a 1d array type.
@@ -302,16 +319,18 @@ end
 --- Concatenates any number of values.
 function L.concat(...)
    local t = {}
+   local vals = {}
    for i,v in ipairs({...}) do
-	  t[i] = v.type
+	  vals[i] = unwrap(v)
+	  t[i] = vals[i].type
    end
    
-   return T.concat(List{...}, L.tuple(t))
+   return wrap_value(T.concat(List(vals), L.tuple(t)))
 end
 
 --- Returns a compile-time constant.
 function L.const(t, v)
-   return T.const(t, v, t)
+   return wrap_value(T.const(t, v, t))
 end
 
 --- Creates a module given a value and an input variable.
@@ -321,7 +340,7 @@ function L.lambda(f, x)
 	  return f.type
    end
 
-   return L_wrap(T.lambda(f, x, type_func))
+   return wrap_module(T.lambda(f, x, type_func))
 end
 
 --- Exports library functions to the global namespace.
@@ -340,6 +359,6 @@ end
 
 L.raw = T
 
-L.unwrap = L_unwrap
+L.unwrap = unwrap
 
 return L
