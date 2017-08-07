@@ -19,7 +19,7 @@ local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
 -- utilization
-local elem_rate = { 1, 1 }
+local elem_rate = { 1, 4 }
 local util = P.reduction_factor(mod, elem_rate)
 
 -- passes

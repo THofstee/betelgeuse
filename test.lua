@@ -5,6 +5,22 @@ local P = require 'betelgeuse.passes'
    tests with rigel
 --]]
 
+local im_size = { 640, 480 }
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+
+local offsets = {}
+for i = 1,im_size[1] do
+   offsets[i] = {}
+   for j = 1,im_size[2] do
+	  offsets[i][j] = { -1, -1 }
+   end
+end
+
+local off = L.const(L.array2d(L.tuple(L.int8(), L.int8()), im_size[1], im_size[2]), offsets)
+local I2 = L.gather_stencil(1, 1)(L.concat(I, off))
+local m = L.map(L.reduce(L.add()))(I2)
+P.translate(m)
+
 -- add constant to image (broadcast)
 local im_size = { 1920, 1080 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
@@ -37,16 +53,16 @@ local m = L.map(L.add())(ij)
 
 -- L.apply(make_lambda(function(x) return L.concat(x, L.const(L.uint8(), 30)) end), L.input(L.uint8()))
 
--- -- box filter conv (fork)
--- local im_size = { 16, 32 }
--- local pad_size = { im_size[1]+16, im_size[2]+3 }
--- local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
--- local pad = L.pad(8, 8, 2, 1)(I)
--- local st = L.stencil(-1, -1, 4, 4)(pad)
--- local st_wt = L.zip_rec()(L.concat(st, st))
--- local conv = L.chain(L.map(L.map(L.add())), L.map(L.reduce(L.add())))
--- local m = L.crop(8, 8, 2, 1)(conv(st_wt))
--- local mod = L.lambda(m, I)
+-- box filter conv (fork)
+local im_size = { 16, 32 }
+local pad_size = { im_size[1]+16, im_size[2]+3 }
+local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local pad = L.pad(8, 8, 2, 1)(I)
+local st = L.stencil(-1, -1, 4, 4)(pad)
+local st_wt = L.zip_rec()(L.concat(st, st))
+local conv = L.chain(L.map(L.map(L.add())), L.map(L.reduce(L.add())))
+local m = L.crop(8, 8, 2, 1)(conv(st_wt))
+local mod = L.lambda(m, I)
 
 -- -- Two inputs, one multi rate
 -- local I = L.input(L.array2d(L.uint8(), 10, 10))

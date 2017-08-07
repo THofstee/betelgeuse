@@ -649,14 +649,14 @@ function reduce_rate.constSeq(m, util)
 
    local input = R.input(m.inputType)
 
+   print(inspect(util))
+   
    local output = R.connect{
 	  input = input,
 	  toModule = m,
 	  util = { util }
    }
 
-   print(inspect(util))
-   
    return R.defineModule{
 	  input = input,
 	  output = output

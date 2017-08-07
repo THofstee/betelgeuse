@@ -2,7 +2,7 @@ local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 
 -- convolution
-local im_size = { 16, 32 }
+local im_size = { 32, 32 }
 local pad_size = { im_size[1]+16, im_size[2]+3 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local pad = L.pad(8, 8, 2, 1)(I)
@@ -24,8 +24,8 @@ local util = P.reduction_factor(mod, elem_size)
 -- passes
 local res
 res = P.translate(mod)
--- res = P.transform(res, util)
--- res = P.streamify(res, elem_size)
--- res = P.peephole(res)
--- print('--- Peephole ---')
--- P.rates(res)
+res = P.transform(res, util)
+res = P.streamify(res, elem_size)
+res = P.peephole(res)
+print('--- Peephole ---')
+P.rates(res)

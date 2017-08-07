@@ -10,7 +10,8 @@ local L = {}
 
 local T = asdl.NewContext()
 T:Define [[
-Type = uint(number n)
+Type = int(number n)
+     | uint(number n)
      | tuple(Type* ts)
      | array2d(Type t, number w, number h)
 
@@ -28,6 +29,7 @@ Module = mul
        | reduce(Module m)
        | zip
        | stencil(number offset_x, number offset_y, number extent_x, number extent_y)
+       | gather_stencil(number w, number y)
        | pad(number left, number right, number top, number bottom)
        | crop(number left, number right, number top, number bottom)
        | upsample(number x, number y)
@@ -71,6 +73,24 @@ function L.stencil(off_x, off_y, ext_x, ext_y)
    end
    
    return L_wrap(T.stencil(off_x, off_y, ext_x, ext_y, type_func))
+end
+
+--- Returns a module that will create a stencil of the image at every input, offset by a specified amount.
+-- ([a], [(i,j)]) -> [[a]]
+function L.gather_stencil(ext_x, ext_y)
+   local function type_func(t)
+	  assert(t.kind == 'tuple' and #t.ts == 2, 'gather_stencil requires input type to be tuple of {image, offsets}')
+
+	  local img_t = t.ts[1]
+	  local off_t = t.ts[2]
+	  assert(img_t.w == off_t.w and img_t.h == off_t.h, 'image and offsets must have same dimensions')
+	  assert(off_t.t.kind == 'tuple' and #off_t.t.ts == 2, 'offsets are expected to be 2-tuples')
+	  assert(off_t.t.ts[1].kind == 'int' and off_t.t.ts[2].kind == 'int', 'offsets should be ints')
+	  
+	  return T.array2d(T.array2d(img_t.t, ext_x, ext_y), img_t.w, img_t.h)
+   end
+   
+   return L_wrap(T.gather_stencil(ext_x, ext_y, type_func))
 end
 
 --- Returns a module that will duplicate the input to a 2d array.
@@ -290,6 +310,11 @@ function L.uint8()
    return T.uint(8)
 end
 -- L.uint8 = T.uint(8)
+
+--- A shorthand for uint(8)
+function L.int8()
+   return T.int(8)
+end
 
 -- --- A placeholder that can be replaced later.
 -- -- This might be needed for feedback loops.
