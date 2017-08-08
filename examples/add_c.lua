@@ -47,14 +47,18 @@ local r2 = translate(add_c(x))
 local r3 = translate(add_c)
 local r4 = P.streamify(translate(add_c))
 
+-- utilization
+local elem_rate = { 1, 1 }
+local util = P.reduction_factor(m, elem_rate)
+
 local out = translate(m)
 print("--- After Translate ---")
 P.rates(out)
-local stream_out = P.streamify(translate(m))
+local stream_out = P.streamify(translate(m), elem_rate)
 print("--- After Streamify ---")
 P.rates(stream_out)
 
-local stream_out = transform(stream_out)
+local stream_out = transform(stream_out, util)
 print("--- After Transform ---")
 P.rates(stream_out)
 

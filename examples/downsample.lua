@@ -11,15 +11,19 @@ local J = L.downsample(2, 1)(L.map(add_c)(I))
 local K = L.map(add_c)(J)
 local mod = L.lambda(K, I)
 
+-- utilization
+local elem_rate = { 1, 1 }
+local util = P.reduction_factor(mod, elem_rate)
+
 -- passes
 local res
 res = P.translate(mod)
 print('--- Translate ---')
 P.rates(res)
-res = P.streamify(res)
+res = P.streamify(res, elem_rate)
 print('--- Streamify ---')
 P.rates(res)
-res = P.transform(res)
+res = P.transform(res, util)
 print('--- Transform ---')
 P.rates(res)
 res = P.peephole(res)

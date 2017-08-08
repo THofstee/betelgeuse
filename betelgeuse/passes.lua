@@ -715,14 +715,9 @@ local function transform(m, util)
 	  output = m
    end
 
-   local function get_utilization(m)
-	  print('WARN: get_utilization is deprecated')
-	  return m:calcSdfRate(output)
-   end
-
    -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
    local function optimize(cur, inputs)
-	  local util = util or get_utilization(cur) or { 0, 0 }
+	  local util = util or { 0, 0 }
 	  if cur.kind == 'apply' then
 		 if util[2] > util[1] then
 			return inline(reduce_rate(cur.fn, util), inputs[1])
