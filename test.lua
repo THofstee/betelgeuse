@@ -19,7 +19,10 @@ end
 local off = L.const(L.array2d(L.tuple(L.int8(), L.int8()), im_size[1], im_size[2]), offsets)
 local I2 = L.gather_stencil(1, 1)(L.concat(I, off))
 local m = L.map(L.reduce(L.add()))(I2)
-P.translate(m)
+-- P.translate(m)
+
+print(L.map(L.reduce(L.add())).internal)
+assert(false)
 
 -- add constant to image (broadcast)
 local im_size = { 1920, 1080 }

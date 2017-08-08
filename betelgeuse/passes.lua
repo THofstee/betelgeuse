@@ -6,6 +6,10 @@ if not path_set then
    path_set = true
 end
 
+-- Disable SDF checking in rigel for now
+local rigel = require 'rigel'
+rigel.SDF = false
+
 local R = require 'rigelSimple'
 local RM = require 'modules'
 local C = require 'examplescommon'
@@ -16,8 +20,8 @@ local L = require 'betelgeuse.lang'
 -- @todo: remove this after debugging
 local inspect = require 'inspect'
 
-function linenum()
-   return debug.getinfo(2, 'l').currentline
+function linenum(level)
+   return debug.getinfo(level or 2, 'l').currentline
 end
 
 local P = {}
@@ -91,24 +95,28 @@ end
 P.get_input = get_input
 
 local function get_name(m)
+   if false then
+	  return base(m).kind .. '-' .. base(m).name
+   end
+   
    if m.kind == 'lambda' then
-	  return m.kind .. '(' .. get_name(m.output) .. ')'
+   	  return m.kind .. '(' .. get_name(m.output) .. ')'
    elseif m.name then
-	  if m.fn then
-		 return m.kind .. '_' .. m.name .. '(' .. get_name(m.fn) .. ')'
-	  elseif m.kind == 'input' then
-		 return m.kind .. '_' .. m.name .. '(' .. tostring(m.type) .. ')'
-	  else
-		 return m.name
-	  end
+   	  if m.fn then
+   		 return m.kind .. '_' .. m.name .. '(' .. get_name(m.fn) .. ')'
+   	  elseif m.kind == 'input' then
+   		 return m.kind .. '_' .. m.name .. '(' .. tostring(m.type) .. ')'
+   	  else
+   		 return m.name
+   	  end
    else
-	  if m.fn then
-		 return m.kind .. '(' .. get_name(m.fn) .. ')'
-	  elseif m.kind == 'input' then
-		 return m.kind .. '(' .. tostring(m.type) .. ')'
-	  else
-		 return m.kind
-	  end
+   	  if m.fn then
+   		 return m.kind .. '(' .. get_name(m.fn) .. ')'
+   	  elseif m.kind == 'input' then
+   		 return m.kind .. '(' .. tostring(m.type) .. ')'
+   	  else
+   		 return m.kind
+   	  end
    end
 end
 P.get_name = get_name
@@ -315,6 +323,7 @@ local function divisor(n, k)
    return 1
 end
 
+-- @todo: replace reduce_rate on modules to be reduce_rates on apply
 local reduce_rate = {}
 local reduce_rate_mt = {
    __call = function(t, m, util)
@@ -371,7 +380,8 @@ end
 reduce_rate.map = memoize(reduce_rate.map)
 
 function reduce_rate.SoAtoAoS(m, util)
-   print('@todo: implement', linenum())
+   print('@todo: implement', m.kind, linenum())
+   
    local t = m.inputType
 
    local input = R.input(R.HS(t))
@@ -388,8 +398,38 @@ function reduce_rate.SoAtoAoS(m, util)
 end
 reduce_rate.SoAtoAoS = memoize(reduce_rate.SoAtoAoS)
 
+function reduce_rate.broadcast(m, util)
+   local out_size = m.outputType.size
+
+   local max_reduce = out_size[1]*out_size[2]
+   local par = math.ceil(max_reduce * util[1]/util[2])
+   par = divisor(max_reduce, par)
+
+   local input = R.input(R.HS(m.inputType))
+
+   local m = C.broadcast(m.inputType, par, 1)
+   
+   local inter = R.connect{
+	  input = input,
+	  toModule = R.HS(m)
+   }
+   
+   local output = change_rate(inter, out_size)
+
+   return R.defineModule{
+	  input = input,
+	  output = output
+   }
+end
+reduce_rate.broadcast = memoize(reduce_rate.broadcast)
+
 function reduce_rate.lift(m, util)
-   -- @todo: not sure if there's much to do here, think about it
+   -- certain modules need to be reduced, but are implemented as lifts
+   if string.find(m.name, 'Broadcast') == 1 then
+	  return reduce_rate.broadcast(m, util)
+   end
+
+   -- otherwise, don't do anything
    local m = R.HS(m)
    
    local input = R.input(m.inputType)
@@ -561,8 +601,8 @@ end
 reduce_rate.downsample = memoize(reduce_rate.downsample)
 
 function reduce_rate.stencil(m, util)
-   print('@todo: implement', linenum())
-
+   print('@todo: fixme', m.kind, linenum())
+   
    -- @todo: hack, should move this to translate probably
    -- @todo: total hack, needs extra pad and crop
    m.xmin = m.xmin - m.xmax
@@ -575,23 +615,20 @@ function reduce_rate.stencil(m, util)
    local par = math.ceil(size[1]*size[2] * util[1]/util[2])
    par = divisor(size[1]*size[2], par)
 
-   local m2 = R.modules.linebuffer{
+   local input = R.input(R.HS(m.inputType))
+
+   local m = R.modules.linebuffer{
 	  type = m.inputType.over,
 	  V = par,
 	  size = size,
 	  stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
    }
-   
-   local m = R.HS(m)
-   local m2 = R.HS(m2)
-
-   local input = R.input(m.inputType)
 
    local in_rate = change_rate(input, { par, 1 })
 
    local inter = R.connect{
 	  input = in_rate,
-	  toModule = m2
+	  toModule = R.HS(m)
    }
 
    local output = change_rate(inter, size)
@@ -604,24 +641,29 @@ end
 reduce_rate.stencil = memoize(reduce_rate.stencil)
 
 function reduce_rate.packTuple(m, util)
-   local hack = {}
-   local sdf = {}
-   for i,t in ipairs(m.inputType.list) do
-	  hack[i] = t.params.A
-	  sdf[i] = { 1, 1 }
-   end
+   if true then
+	  -- @todo: should this introduce changeRates on every input?
+	  
+   else
+	  local hack = {}
+	  local sdf = {}
+	  for i,t in ipairs(m.inputType.list) do
+		 hack[i] = t.params.A
+		 sdf[i] = { 1, 1 }
+	  end
 
-   local input = R.input(m.inputType, sdf)
-   
-   local output = R.connect{
-	  input = input,
-	  toModule = RM.packTuple(hack)
-   }
-   
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+	  local input = R.input(m.inputType, sdf)
+	  
+	  local output = R.connect{
+		 input = input,
+		 toModule = RM.packTuple(hack)
+	  }
+	  
+	  return R.defineModule{
+		 input = input,
+		 output = output
+	  }
+   end
 end
 reduce_rate.packTuple = memoize(reduce_rate.packTuple)
 
@@ -644,17 +686,15 @@ end
 reduce_rate.lambda = memoize(reduce_rate.lambda)
 
 function reduce_rate.constSeq(m, util)
-   print('@todo: implement', linenum())
+   print('@todo: implement', m.kind, linenum())
+
    local m = R.HS(m)
 
    local input = R.input(m.inputType)
 
-   print(inspect(util))
-   
    local output = R.connect{
 	  input = input,
-	  toModule = m,
-	  util = { util }
+	  toModule = m
    }
 
    return R.defineModule{
@@ -748,6 +788,8 @@ local function peephole(m)
 			input = inputs[1],
 			toModule = cur.fn
 		 }
+	  elseif cur.kind == 'concat' then
+		 return R.concat(inputs)
 	  end
 
 	  return cur
@@ -773,6 +815,8 @@ local function peephole(m)
 			input = inputs[1],
 			toModule = cur.fn
 		 }
+	  elseif cur.kind == 'concat' then
+		 return R.concat(inputs)
 	  end
 
 	  return cur
@@ -795,6 +839,8 @@ local function peephole(m)
 			input = inputs[1],
 			toModule = cur.fn
 		 }
+	  elseif cur.kind == 'concat' then
+		 return R.concat(inputs)
 	  end
 
 	  return cur
@@ -833,7 +879,11 @@ local function get_type_signature(cur)
 	  input = string.sub(input, 1, -3) .. '}'
 	  return input .. ' -> ' .. tostring(cur.type)
    else
-	  return tostring(cur.fn.inputType) .. ' -> ' .. tostring(cur.fn.outputType)
+	  if tostring(cur.fn.inputType) == 'null' then
+		 return 'nil' .. ' -> ' .. tostring(cur.fn.outputType)
+	  else
+		 return tostring(cur.fn.inputType) .. ' -> ' .. tostring(cur.fn.outputType)
+	  end
    end
 end
 P.get_type_signature = get_type_signature
@@ -842,7 +892,7 @@ local function rates(m)
    m.output:visitEach(function(cur)
 		 print(P.get_name(cur))
 		 print(':: ' .. P.get_type_signature(cur))
-		 print(inspect(cur:calcSdfRate(m.output)))
+		 -- print(inspect(cur:calcSdfRate(m.output))) -- @todo: replace
    end)
 end
 P.rates = rates
