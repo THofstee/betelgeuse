@@ -270,10 +270,10 @@ end
 local function peephole(m)
    local function fuse_cast(cur, inputs)
 	  if cur.kind == 'apply' then
-		 if string.find(base(cur).kind, 'cast') then
+		 if base(cur).generator == 'C.cast' then
 			local temp_cur = base(cur)
 			
-			if #inputs == 1 and string.find(base(inputs[1]).kind, 'cast') then
+			if #inputs == 1 and base(inputs[1]).generator == 'C.cast' then
 			   local temp_input = base(inputs[1])
 			   
 			   if temp_input.inputType == temp_cur.outputType then
@@ -303,9 +303,11 @@ local function peephole(m)
 		 }
 	  elseif cur.kind == 'concat' then
 		 return R.concat(inputs)
+	  elseif cur.kind == 'input' then
+		 return cur
+	  else
+		 assert(false, 'not implemented: ' .. cur.kind)
 	  end
-
-	  return cur
    end
 
    local function fuse_changeRate(cur, inputs)
@@ -330,9 +332,11 @@ local function peephole(m)
 		 }
 	  elseif cur.kind == 'concat' then
 		 return R.concat(inputs)
+	  elseif cur.kind == 'input' then
+		 return cur
+	  else
+		 assert(false, 'not implemented: ' .. cur.kind)
 	  end
-
-	  return cur
    end
 
    local function removal(cur, inputs)
@@ -342,7 +346,7 @@ local function peephole(m)
 			if temp_cur.inputRate == temp_cur.outputRate then
 			   return inputs[1]
 			end
-		 elseif string.find(temp_cur.kind, 'cast') then
+		 elseif temp_cur.generator == 'C.cast' then
 			if temp_cur.inputType == temp_cur.outputType then
 			   return inputs[1]
 			end
@@ -354,9 +358,11 @@ local function peephole(m)
 		 }
 	  elseif cur.kind == 'concat' then
 		 return R.concat(inputs)
+	  elseif cur.kind == 'input' then
+		 return cur
+	  else
+		 assert(false, 'not implemented: ' .. cur.kind)
 	  end
-
-	  return cur
    end
 
    local output
