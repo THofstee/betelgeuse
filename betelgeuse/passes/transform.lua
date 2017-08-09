@@ -239,14 +239,14 @@ function reduce_rate.SoAtoAoS(m, util)
 end
 
 function reduce_rate.broadcast(m, util)
-   assert(false, "Not yet implemented")
+   local input = reduce_rate(m.inputs[1], util)
+   local m = unwrap_handshake(m.fn)
+
    local out_size = m.outputType.size
 
    local max_reduce = out_size[1]*out_size[2]
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
-
-   local input = R.input(R.HS(m.inputType))
 
    local m = C.broadcast(m.inputType, par, 1)
    
@@ -255,17 +255,12 @@ function reduce_rate.broadcast(m, util)
 	  toModule = R.HS(m)
    }
    
-   local output = change_rate(inter, out_size)
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+   return change_rate(inter, out_size)
 end
 
 function reduce_rate.lift(m, util)
    -- certain modules need to be reduced, but are implemented as lifts
-   if string.find(m.name, 'Broadcast') == 1 then
+   if string.find(unwrap_handshake(m.fn).name, 'Broadcast') == 1 then
 	  return reduce_rate.broadcast(m, util)
    end
 
