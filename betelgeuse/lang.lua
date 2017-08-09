@@ -61,7 +61,11 @@ local function L_wrap(m)
 end
 
 local function L_unwrap(w)
-   return w.internal
+   if w.kind == 'wrapped' then
+	  return w.internal
+   else
+	  return w
+   end
 end
 
 --- Returns a module that will create a stencil of the image at every input.
