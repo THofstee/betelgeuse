@@ -196,6 +196,41 @@ function reduce_rate.SoAtoAoS(m, util)
 
    local m = m.fn
    local t = m.inputType
+   
+   if input.kind == 'apply' and input.fn.kind == 'packTuple' and input.inputs[1].kind == 'concat' then
+	  local size = m.outputType.params.A.size
+
+	  local max_reduce = size[1]*size[2]
+	  local par = math.ceil(max_reduce * util[1]/util[2])
+	  par = divisor(max_reduce, par)
+	  
+	  local streams_in = {}
+	  local hack = {}
+	  local hack2 = {}
+
+	  for i,inpt in ipairs(input.inputs[1].inputs) do
+		 streams_in[i] = change_rate(inpt, { par, 1 })
+		 hack[i] = streams_in[i].type.params.A
+		 hack2[i] = hack[i].over
+	  end
+
+	  local inter = R.connect{
+		 input = R.concat(streams_in),
+		 toModule = RM.packTuple(hack)
+	  }
+
+	  local inter2 = R.connect{
+		 input = inter,
+		 toModule = R.HS(
+			R.modules.SoAtoAoS{
+			   type = hack2,
+			   size = { par, 1 }
+			}
+		 )
+	  }
+
+	  return change_rate(inter2, size)
+   end   
 
    return R.connect{
 	  input = input,
@@ -415,24 +450,16 @@ function reduce_rate.packTuple(m, util)
    local input = reduce_rate(m.inputs[1], util)
 
    local m = unwrap_handshake(m.fn)
-   
+   	  
    local hack = {}
    for i,t in ipairs(m.inputType.list) do
 	  hack[i] = t.params.A
    end
-	  
-   if input.kind == 'concat' then
-	  -- @todo: should this introduce changeRates on every input?
-	  return R.connect{
-		 input = input,
-		 toModule = RM.packTuple(hack)
-	  }
-   else
-	  return R.connect{
-		 input = input,
-		 toModule = RM.packTuple(hack)
-	  }
-   end
+
+   return R.connect{
+	  input = input,
+	  toModule = RM.packTuple(hack)
+   }
 end
 
 function reduce_rate.lambda(m, util)

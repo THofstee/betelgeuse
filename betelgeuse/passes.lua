@@ -28,6 +28,7 @@ local P = {}
 
 P.transform = require 'betelgeuse.passes.transform'
 P.translate = require 'betelgeuse.passes.translate'
+P.to_handshake = require 'betelgeuse.passes.to_handshake'
 
 local _VERBOSE = false
 
@@ -195,8 +196,6 @@ local function inline(m, input)
 		 end
    end)
 end
-
-P.to_handshake = require 'betelgeuse.passes.to_handshake'
 
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
