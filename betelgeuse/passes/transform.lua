@@ -4,7 +4,7 @@ local C = require 'examplescommon'
 
 local to_handshake = require 'betelgeuse.passes.to_handshake'
 
-local _VERBOSE = false
+local _VERBOSE = true
 
 local function linenum(level)
    return debug.getinfo(level or 2, 'l').currentline
@@ -119,7 +119,6 @@ local reduce_rate_mt = {
 	  if util[2] <= util[1] then return m end
 
 	  local dispatch = m.kind
-	  if _VERBOSE then print("reduce_rate." .. dispatch) end
 	  if string.find(dispatch, 'lift') then return reduce_rate.lift(m, util) end
 	  assert(reduce_rate[dispatch], "dispatch function " .. dispatch .. " is nil")
 	  return reduce_rate[dispatch](m, util)
@@ -260,7 +259,7 @@ end
 
 function reduce_rate.lift(m, util)
    -- certain modules need to be reduced, but are implemented as lifts
-   if string.find(unwrap_handshake(m.fn).name, 'Broadcast') == 1 then
+   if unwrap_handshake(m.fn).generator == 'C.broadcast' then
 	  return reduce_rate.broadcast(m, util)
    end
 
@@ -283,7 +282,7 @@ function reduce_rate.pad(m, util)
    local max_reduce = out_size[1]*out_size[2]
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
-      
+   
    local in_rate = change_rate(input, { par, 1 })
    
    local m = R.modules.padSeq{
@@ -445,7 +444,7 @@ function reduce_rate.packTuple(m, util)
    local input = reduce_rate(m.inputs[1], util)
 
    local m = unwrap_handshake(m.fn)
-   	  
+   
    local hack = {}
    for i,t in ipairs(m.inputType.list) do
 	  hack[i] = t.params.A
@@ -502,6 +501,15 @@ local function transform(m, util)
    else
 	  return output
    end   
+end
+
+if _VERBOSE then
+   for k,v in pairs(reduce_rate) do
+	  reduce_rate[k] = function(m, util)
+		 print('reduce_rate.' .. k)
+		 return v(m, util)
+	  end
+   end
 end
 
 return transform

@@ -78,11 +78,11 @@ local function graph_view(l)
    print(inspect(dot))
 
    dot:write('dbg/graph.dot')
---    -- dot:compile('dbg/graph.dot', 'png')
+   --    -- dot:compile('dbg/graph.dot', 'png')
    
---    -- -- print(inspect(r, options))
+   --    -- -- print(inspect(r, options))
    dot:render('dbg/graph.dot', 'png')
-   assert(false)
+   -- assert(false)
    
 end
 
@@ -99,7 +99,7 @@ end
 --    -- 		 return item
 --    -- 	  end
 --    -- }
-   
+
 --    -- local verbose = true
 --    -- local a = {}
 --    -- setmetatable(a, dispatch_mt)
@@ -120,7 +120,7 @@ end
 --    -- 	  else
 --    -- 		 dot:edge(a(r.inputs[1]), a(r.fn))
 --    -- 	  end
-   
+
 --    -- 	  return ident
 --    -- end
 
@@ -161,7 +161,7 @@ end
 --    -- 	  dot:node(ident, "concatArray2d")
 --    -- 	  return ident
 --    -- end
-   
+
 --    -- function a.makeHandshake(r)
 --    -- 	  local ident = str(r)
 --    -- 	  dot:node(ident, "makeHandshake")
@@ -186,7 +186,7 @@ end
 --    -- a(r)
 --    -- dot:write('dbg/graph.dot')
 --    -- dot:compile('dbg/graph.dot', 'png')
-   
+
 --    -- -- print(inspect(r, options))
 --    -- -- dot:render('dbg/graph.dot', 'png')
 -- end
