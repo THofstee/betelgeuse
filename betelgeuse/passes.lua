@@ -326,27 +326,58 @@ end
 -- @todo: replace reduce_rate on modules to be reduce_rates on apply
 local reduce_rate = {}
 local reduce_rate_mt = {
-   __call = function(t, m, util)
-	  if _VERBOSE then print("reduce_rate." .. m.kind) end
-	  if string.find(m.kind, 'lift') then return t.lift(m, util) end
-	  assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
-	  return t[m.kind](m, util)
+   __call = function(reduce_rate, m, util)
+	  -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
+	  if util[2] <= util[1] then return m end
+
+	  local dispatch = m.kind
+	  if _VERBOSE then print("reduce_rate." .. dispatch) end
+	  if string.find(dispatch, 'lift') then return reduce_rate.lift(m, util) end
+	  assert(reduce_rate[dispatch], "dispatch function " .. dispatch .. " is nil")
+	  return reduce_rate[dispatch](m, util)
    end
 }
 setmetatable(reduce_rate, reduce_rate_mt)
--- reduce_rate = memoize(reduce_rate)
 
 function reduce_rate.makeHandshake(m, util)
-   return reduce_rate(unwrap_handshake(m), util)
+   if string.find(m.fn.fn.kind, 'lift') then return reduce_rate.lift(m, util) end
+   return reduce_rate[m.fn.fn.kind](m, util)
 end
-reduce_rate.makeHandshake = memoize(reduce_rate.makeHandshake)
 
 function reduce_rate.liftHandshake(m, util)
-   assert(false, "Not yet implemented")
+   assert(false, "not yet implemented")
 end
-reduce_rate.liftHandshake = memoize(reduce_rate.liftHandshake)
+
+function reduce_rate.apply(m, util)
+   -- return R.connect{
+   -- 	  input = reduce_rate(m.inputs[1]),
+   -- 	  toModule = reduce_rate(m)
+   -- }
+   if string.find(m.fn.kind, 'lift') then return reduce_rate.lift(m, util) end
+   return reduce_rate[m.fn.kind](m, util)
+end
+
+function reduce_rate.input(m, util)
+   if is_handshake(m.type) then
+	  return m
+   else
+	  return R.input(R.HS(m.type))
+   end
+end
+
+function reduce_rate.concat(m, util)
+   local inputs = {}
+   for i,input in ipairs(m.inputs) do
+	  inputs[i] = reduce_rate(input, util)
+   end
+
+   return R.concat(inputs)
+end
 
 function reduce_rate.map(m, util)
+   local input = reduce_rate(m.inputs[1], util)
+
+   local m = unwrap_handshake(m.fn)
    local t = m.inputType
    local w = m.W
    local h = m.H
@@ -355,8 +386,6 @@ function reduce_rate.map(m, util)
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
 
-   local input = R.input(R.HS(t))
-   
    local in_rate = change_rate(input, { par, 1 })
 
    -- @todo: the module being mapped over probably also needs to be optimized, for example recursive maps
@@ -370,35 +399,24 @@ function reduce_rate.map(m, util)
 	  toModule = R.HS(m)
    }
 
-   local output = change_rate(inter, { w, h })
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+   return change_rate(inter, { w, h })
 end
-reduce_rate.map = memoize(reduce_rate.map)
 
 function reduce_rate.SoAtoAoS(m, util)
    print('@todo: implement', m.kind, linenum())
-   
+   local input = reduce_rate(m.inputs[1], util)
+
+   local m = m.fn
    local t = m.inputType
 
-   local input = R.input(R.HS(t))
-
-   local output = R.connect{
+   return R.connect{
 	  input = input,
 	  toModule = R.HS(m)
    }
-   
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
 end
-reduce_rate.SoAtoAoS = memoize(reduce_rate.SoAtoAoS)
 
 function reduce_rate.broadcast(m, util)
+   assert(false, "Not yet implemented")
    local out_size = m.outputType.size
 
    local max_reduce = out_size[1]*out_size[2]
@@ -421,7 +439,6 @@ function reduce_rate.broadcast(m, util)
 	  output = output
    }
 end
-reduce_rate.broadcast = memoize(reduce_rate.broadcast)
 
 function reduce_rate.lift(m, util)
    -- certain modules need to be reduced, but are implemented as lifts
@@ -430,23 +447,16 @@ function reduce_rate.lift(m, util)
    end
 
    -- otherwise, don't do anything
-   local m = R.HS(m)
-   
-   local input = R.input(m.inputType)
-
-   local output = R.connect{
-	  input = input,
-	  toModule = m
-   }
-   
-   return R.defineModule{
-	  input = input,
-	  output = output
+   return R.connect{
+	  input = reduce_rate(m.inputs[1], util),
+	  toModule = R.HS(m.fn)
    }
 end
-reduce_rate.lift = memoize(reduce_rate.lift)
 
 function reduce_rate.pad(m, util)
+   local input = reduce_rate(m.inputs[1], util)
+   local m = unwrap_handshake(m.fn)
+
    local t = m.inputType
    local w = m.width
    local h = m.height
@@ -455,12 +465,10 @@ function reduce_rate.pad(m, util)
    local max_reduce = out_size[1]*out_size[2]
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
-   
-   local input = R.input(R.HS(t))
-   
+      
    local in_rate = change_rate(input, { par, 1 })
    
-   m = R.modules.padSeq{
+   local m = R.modules.padSeq{
 	  type = m.type,
 	  V = par,
 	  size = { w, h },
@@ -473,17 +481,15 @@ function reduce_rate.pad(m, util)
 	  toModule = R.HS(m)
    }
 
-   local output = change_rate(inter, out_size)
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+   return change_rate(inter, out_size)
 end
-reduce_rate.pad = memoize(reduce_rate.pad)
 
 function reduce_rate.crop(m, util)
+   local input = reduce_rate(m.inputs[1], util)
+   
    -- @todo: double check implementation
+   local m = unwrap_handshake(m.fn)
+
    local t = m.inputType
    local w = m.width
    local h = m.height
@@ -492,8 +498,6 @@ function reduce_rate.crop(m, util)
    local max_reduce = w*h
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
-   
-   local input = R.input(R.HS(t))
    
    local in_rate = change_rate(input, { par, 1 })
    
@@ -509,16 +513,11 @@ function reduce_rate.crop(m, util)
 	  toModule = R.HS(m)
    }
 
-   local output = change_rate(inter, out_size)
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+   return change_rate(inter, out_size)
 end
-reduce_rate.crop = memoize(reduce_rate.crop)
 
 function reduce_rate.upsample(m, util)
+   assert(false, "Not yet implemented")
    -- @todo: change to be upsampleY first then upsampleX, once implemented
    local input = R.input(R.HS(m.inputType))
 
@@ -556,9 +555,9 @@ function reduce_rate.upsample(m, util)
 	  output = output
    }
 end
-reduce_rate.upsample = memoize(reduce_rate.upsample)
 
 function reduce_rate.downsample(m, util)
+   assert(false, "Not yet implemented")
    local input = R.input(R.HS(m.inputType))
 
    local in_size = m.inputType.size
@@ -598,10 +597,12 @@ function reduce_rate.downsample(m, util)
 	  output = output
    }
 end
-reduce_rate.downsample = memoize(reduce_rate.downsample)
 
 function reduce_rate.stencil(m, util)
    print('@todo: fixme', m.kind, linenum())
+   local input = reduce_rate(m.inputs[1], util)
+
+   local m = unwrap_handshake(m.fn)
    
    -- @todo: hack, should move this to translate probably
    -- @todo: total hack, needs extra pad and crop
@@ -614,8 +615,6 @@ function reduce_rate.stencil(m, util)
 
    local par = math.ceil(size[1]*size[2] * util[1]/util[2])
    par = divisor(size[1]*size[2], par)
-
-   local input = R.input(R.HS(m.inputType))
 
    local m = R.modules.linebuffer{
 	  type = m.inputType.over,
@@ -631,43 +630,35 @@ function reduce_rate.stencil(m, util)
 	  toModule = R.HS(m)
    }
 
-   local output = change_rate(inter, size)
-   
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+   return change_rate(inter, size)
 end
-reduce_rate.stencil = memoize(reduce_rate.stencil)
 
 function reduce_rate.packTuple(m, util)
-   if true then
-	  -- @todo: should this introduce changeRates on every input?
-	  
-   else
-	  local hack = {}
-	  local sdf = {}
-	  for i,t in ipairs(m.inputType.list) do
-		 hack[i] = t.params.A
-		 sdf[i] = { 1, 1 }
-	  end
+   local input = reduce_rate(m.inputs[1], util)
 
-	  local input = R.input(m.inputType, sdf)
+   local m = unwrap_handshake(m.fn)
+   
+   local hack = {}
+   for i,t in ipairs(m.inputType.list) do
+	  hack[i] = t.params.A
+   end
 	  
-	  local output = R.connect{
+   if input.kind == 'concat' then
+	  -- @todo: should this introduce changeRates on every input?
+	  return R.connect{
 		 input = input,
 		 toModule = RM.packTuple(hack)
 	  }
-	  
-	  return R.defineModule{
+   else
+	  return R.connect{
 		 input = input,
-		 output = output
+		 toModule = RM.packTuple(hack)
 	  }
    end
 end
-reduce_rate.packTuple = memoize(reduce_rate.packTuple)
 
 function reduce_rate.lambda(m, util)
+   assert(false, "Not yet implemented")
    -- @todo: recurse optimization calls here?
    local m = R.HS(m)
    
@@ -683,31 +674,16 @@ function reduce_rate.lambda(m, util)
 	  output = output
    }
 end
-reduce_rate.lambda = memoize(reduce_rate.lambda)
 
 function reduce_rate.constSeq(m, util)
    print('@todo: implement', m.kind, linenum())
 
-   local m = R.HS(m)
-
-   local input = R.input(m.inputType)
-
-   local output = R.connect{
-	  input = input,
-	  toModule = m
-   }
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+   return m
 end
-reduce_rate.constSeq = memoize(reduce_rate.constSeq)
 
 -- @todo: maybe this should only take in a lambda as input
 local function transform(m, util)
    local m = to_handshake(m)
-   
    local output
    if m.kind == 'lambda' then
 	  output = m.output
@@ -715,27 +691,8 @@ local function transform(m, util)
 	  output = m
    end
 
-   -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
-   local function optimize(cur, inputs)
-	  local util = util or { 0, 0 }
-	  if cur.kind == 'apply' then
-		 if util[2] > util[1] then
-			return inline(reduce_rate(cur.fn, util), inputs[1])
-		 else
-			return R.connect{
-			   input = inputs[1],
-			   toModule = cur.fn
-			}
-		 end
-	  elseif cur.kind == 'concat' then
-		 return R.concat(inputs)
-	  end
-
-	  return cur
-   end
-
    -- run rate optimization
-   output = output:visitEach(optimize)
+   output = reduce_rate(output, util)
    
    if m.kind == 'lambda' then
 	  return R.defineModule{
