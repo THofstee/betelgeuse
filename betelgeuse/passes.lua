@@ -517,9 +517,9 @@ function reduce_rate.crop(m, util)
 end
 
 function reduce_rate.upsample(m, util)
-   assert(false, "Not yet implemented")
    -- @todo: change to be upsampleY first then upsampleX, once implemented
-   local input = R.input(R.HS(m.inputType))
+   local input = reduce_rate(m.inputs[1], util)
+   local m = unwrap_handshake(m.fn)
 
    -- @todo: divide by util to figure out output element type
    -- @todo: sample for downsample
@@ -548,17 +548,12 @@ function reduce_rate.upsample(m, util)
 	  toModule = R.HS(m)
    }
 
-   local output = change_rate(inter, out_size)
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+   return change_rate(inter, out_size)
 end
 
 function reduce_rate.downsample(m, util)
-   assert(false, "Not yet implemented")
-   local input = R.input(R.HS(m.inputType))
+   local input = reduce_rate(m.inputs[1], util)
+   local m = unwrap_handshake(m.fn)
 
    local in_size = m.inputType.size
    local par = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
@@ -590,12 +585,7 @@ function reduce_rate.downsample(m, util)
 	  toModule = R.HS(m)
    }
 
-   local output = change_rate(inter, out_size)
-
-   return R.defineModule{
-	  input = input,
-	  output = output
-   }
+   return change_rate(inter, out_size)
 end
 
 function reduce_rate.stencil(m, util)
