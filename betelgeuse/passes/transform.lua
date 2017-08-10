@@ -203,6 +203,7 @@ function reduce_rate.map(m, util)
 
 	  if m.fn.kind == 'map' then
 		 -- @todo: runs into issues where the reduce_rate on the inner map starts calling reduce_rate on its inputs again........
+		 -- @todo: this is actually probably almost the wanted behavior, we push down the new utilization through the pipeline and need to adjust certain inputs, right? for example, constSeq that is an input to this module should be reduced from [16,1][1,1] to [8,1][1,1], etc.
 		 -- @todo: wouldn't have this issue if reduce_rate.map was operating on modules instead of applys
 		 -- @todo: maybe still can be on applys, but then internally theres a reduce_rate that operates on the modules, and then the outer function that works on applys still inlines everything? this way i can still keep the weird concat -> packtuple -> soatoaos thing in its own function instead of reduce_rate.apply
 		 dont = true

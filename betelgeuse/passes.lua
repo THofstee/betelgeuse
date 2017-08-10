@@ -372,9 +372,11 @@ local function peephole(m)
 	  output = m
    end
 
-   output = output:visitEach(fuse_cast)
-   output = output:visitEach(fuse_changeRate)
-   output = output:visitEach(removal)
+   for k=1,5 do
+	  output = output:visitEach(fuse_cast)
+	  output = output:visitEach(fuse_changeRate)
+	  output = output:visitEach(removal)
+   end
 
    if m.kind == 'lambda' then
 	  return R.defineModule{

@@ -32,7 +32,7 @@ res = P.transform(res, util)
 res = P.streamify(res, elem_size)
 res = P.peephole(res)
 print('--- Peephole ---')
-P.rates(res)
+gv(res)
 
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }

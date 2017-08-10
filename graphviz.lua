@@ -22,19 +22,15 @@ end
 
 local __Graph = {
    node = function(self, nodename, label)
-	  local node = {node = nodename, label = label}
+	  local node = { node = nodename, label = label }
 	  table.insert(self.nodes.node, node)
 	  return node
    end,
 
-   edge = function(self, ...)
-	  local args = {...}
-
-	  for i = 2, #args do
-		 table.insert(self.edges.edge, {prev = args[1], succ = args[i]})
-	  end
-
-	  return self
+   edge = function(self, a, b, label)
+	  local edge = { prev = a, succ = b, label = label }
+	  table.insert(self.edges.edge, edge)
+	  return edge
    end,
 
    source = function(self , graphtype , graphname , level)
@@ -64,7 +60,11 @@ local __Graph = {
 
 	  local edge = self.edges.edge
 	  for i = 1, #edge do
-		 src = src .. ("\t\t\t%s -> %s\n"):format(edge[i].prev, edge[i].succ)
+		 src = src .. ("\t\t\t%s -> %s"):format(edge[i].prev, edge[i].succ)
+		 if edge[i].label then
+			src = src .. (" [label=%s]"):format(edge[i].label)
+		 end
+		 src = src .. '\n'
 	  end
 
 	  src = src .. "}"
