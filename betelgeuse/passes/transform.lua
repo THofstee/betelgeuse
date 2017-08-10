@@ -183,9 +183,9 @@ function reduce_rate.map(m, util)
 
    local in_rate = change_rate(input, { par, 1 })
 
-   if util[1]*(max_reduce/par)/util[2] < 1 then
+   if util[1]*(max_reduce/par)/util[2] < 1 and par ~= 1 then print('case of par>1 not yet implemented') end
+   if util[1]*(max_reduce/par)/util[2] < 1 and par == 1 then
 	  -- we would still like to further reduce parallelism, reduce inner module
-	  assert(par == 1, 'case of par>1 not yet implemented')
 	  local in_cast = R.connect{
 		 input = in_rate,
 		 toModule = R.HS(
