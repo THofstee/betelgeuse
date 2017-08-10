@@ -102,23 +102,23 @@ local function get_name(m)
    end
    
    if m.kind == 'lambda' then
-   	  return m.kind .. '(' .. get_name(m.output) .. ')'
+	  return m.kind .. '(' .. get_name(m.output) .. ')'
    elseif m.name then
-   	  if m.fn then
-   		 return m.kind .. '_' .. m.name .. '(' .. get_name(m.fn) .. ')'
-   	  elseif m.kind == 'input' then
-   		 return m.kind .. '_' .. m.name .. '(' .. tostring(m.type) .. ')'
-   	  else
-   		 return m.name
-   	  end
+	  if m.fn then
+		 return m.kind .. '_' .. m.name .. '(' .. get_name(m.fn) .. ')'
+	  elseif m.kind == 'input' then
+		 return m.kind .. '_' .. m.name .. '(' .. tostring(m.type) .. ')'
+	  else
+		 return m.name
+	  end
    else
-   	  if m.fn then
-   		 return m.kind .. '(' .. get_name(m.fn) .. ')'
-   	  elseif m.kind == 'input' then
-   		 return m.kind .. '(' .. tostring(m.type) .. ')'
-   	  else
-   		 return m.kind
-   	  end
+	  if m.fn then
+		 return m.kind .. '(' .. get_name(m.fn) .. ')'
+	  elseif m.kind == 'input' then
+		 return m.kind .. '(' .. tostring(m.type) .. ')'
+	  else
+		 return m.kind
+	  end
    end
 end
 P.get_name = get_name
@@ -126,7 +126,7 @@ P.get_name = get_name
 local function change_rate(input, out_size)
    local t = input.type
    if is_handshake(t) then
-   	  t = t.params.A
+	  t = t.params.A
    end
 
    local arr_t, w, h
@@ -154,15 +154,15 @@ local function change_rate(input, out_size)
    local h_out = out_size[2]
 
    local rate = R.connect{
-   	  input = in_cast,
-   	  toModule = R.HS(
-   		 R.modules.changeRate{
-   			type = arr_t,
-   			H = 1,
-   			inW = w*h,
-   			outW = w_out*h_out
-   		 }
-   	  )
+	  input = in_cast,
+	  toModule = R.HS(
+		 R.modules.changeRate{
+			type = arr_t,
+			H = 1,
+			inW = w*h,
+			outW = w_out*h_out
+		 }
+	  )
    }
 
    local output = R.connect{
@@ -182,8 +182,8 @@ P.change_rate = change_rate
 -- @todo: split body in to inline_cur and then use inline_cur in other places?
 local function inline(m, input)
    return m.output:visitEach(function(cur, inputs)
-   		 if cur.kind == 'input' then
-   			return input
+		 if cur.kind == 'input' then
+			return input
 		 elseif cur.kind == 'apply' then
 			return R.connect{
 			   input = inputs[1],

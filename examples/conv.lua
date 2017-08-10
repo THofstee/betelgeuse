@@ -22,7 +22,7 @@ local gv = require 'graphview'
 gv(mod)
 -- assert(false)
 
-local elem_size = { 1, 4 }
+local elem_size = { 1, 8 }
 local util = P.reduction_factor(mod, elem_size)
 
 -- passes
