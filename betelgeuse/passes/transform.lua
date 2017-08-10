@@ -2,6 +2,8 @@ local R = require 'rigelSimple'
 local RM = require 'modules'
 local C = require 'examplescommon'
 
+local inspect = require 'inspect'
+
 local to_handshake = require 'betelgeuse.passes.to_handshake'
 
 local _VERBOSE = false
@@ -101,7 +103,7 @@ local function divisor(n, k)
    end
 
    -- find the greatest divisor of n smaller than k
-   for i in k,2,-1 do
+   for i=k,2,-1 do
 	  if n%i == 0 then
 		 return i
 	  end
@@ -161,9 +163,15 @@ function reduce_rate.concat(m, util)
    return R.concat(inputs)
 end
 
+local dont = false
 function reduce_rate.map(m, util)
-   local input = reduce_rate(m.inputs[1], util)
-
+   local input
+   if dont then
+	  input = m.inputs[1]
+   else
+	  input = reduce_rate(m.inputs[1], util)
+   end
+	  
    local m = unwrap_handshake(m.fn)
    local t = m.inputType
    local w = m.W
@@ -175,18 +183,68 @@ function reduce_rate.map(m, util)
 
    local in_rate = change_rate(input, { par, 1 })
 
+   if par == 1 then
+	  local in_cast = R.connect{
+	  	 input = in_rate,
+	  	 toModule = R.HS(
+	  		C.cast(
+	  		   R.array2d(input.type.params.A.over, par, 1),
+	  		   input.type.params.A.over
+	  		)
+	  	 )
+	  }
+
+	  local inter = R.connect{
+	  	 input = in_cast,
+	  	 toModule = R.HS(m.fn)
+	  }
+
+	  if m.fn.kind == 'map' then
+		 -- @todo: runs into issues where the reduce_rate on the inner map starts calling reduce_rate on its inputs again........
+		 -- @todo: wouldn't have this issue if reduce_rate.map was operating on modules instead of applys
+		 -- @todo: maybe still can be on applys, but then internally theres a reduce_rate that operates on the modules, and then the outer function that works on applys still inlines everything? this way i can still keep the weird concat -> packtuple -> soatoaos thing in its own function instead of reduce_rate.apply
+		 dont = true
+		 local m2 = reduce_rate(inter, { util[1], math.floor(util[2]/max_reduce) })
+		 
+		 local out_cast = R.connect{
+			input = m2,
+			toModule = R.HS(
+			   C.cast(
+				  m2.type.params.A,
+				  R.array2d(m2.type.params.A, par, 1)
+			   )
+			)
+		 }
+
+		 dont = false
+		 return change_rate(out_cast, { w, h })
+	  end
+
+	  local out_cast = R.connect{
+	  	 input = inter,
+	  	 toModule = R.HS(
+	  		C.cast(
+	  		   inter.type.params.A,
+	  		   R.array2d(inter.type.params.A, par, 1)
+	  		)
+	  	 )
+	  }
+
+	  return change_rate(out_cast, { w, h })
+   else
+	  m = R.modules.map{
+		 fn = m.fn,
+		 size = { par }
+	  }
+
+	  local inter = R.connect{
+		 input = in_rate,
+		 toModule = R.HS(m)
+	  }
+
+	  return change_rate(inter, { w, h })
+   end
    -- @todo: the module being mapped over probably also needs to be optimized, for example recursive maps
-   m = R.modules.map{
-	  fn = m.fn,
-	  size = { par }
-   }
-
-   local inter = R.connect{
-	  input = in_rate,
-	  toModule = R.HS(m)
-   }
-
-   return change_rate(inter, { w, h })
 end
 
 function reduce_rate.SoAtoAoS(m, util)
@@ -279,10 +337,10 @@ function reduce_rate.pad(m, util)
    local h = m.height
    local out_size = m.outputType.size
 
-   local max_reduce = out_size[1]*out_size[2]
+   local max_reduce = w*h
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
-   
+
    local in_rate = change_rate(input, { par, 1 })
    
    local m = R.modules.padSeq{
@@ -421,7 +479,7 @@ function reduce_rate.stencil(m, util)
    local size = { m.w, m.h }
 
    local par = math.ceil(size[1]*size[2] * util[1]/util[2])
-   par = divisor(size[1]*size[2], par)
+   par = divisor(m.w, par)
 
    local m = R.modules.linebuffer{
 	  type = m.inputType.over,

@@ -42,5 +42,5 @@ R.harness{
    fn = res,
    inFile = "box_32.raw", inSize = in_size,
    outFile = "conv", outSize = out_size,
-   earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
+   earlyOverride = 48000, -- downsample is variable latency, overestimate cycles
 }

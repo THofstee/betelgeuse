@@ -22,8 +22,9 @@ end
 
 local __Graph = {
    node = function(self, nodename, label)
-	  table.insert(self.nodes.node, {node = nodename, label = label})
-	  return self.nodes.node[table.getn(self.nodes.node)]
+	  local node = {node = nodename, label = label}
+	  table.insert(self.nodes.node, node)
+	  return node
    end,
 
    edge = function(self, ...)
