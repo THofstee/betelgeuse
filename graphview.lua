@@ -10,6 +10,16 @@ local function graph_view(l)
    
    local dot = Graphviz()
 
+   local function typestr(t)
+	  if t.kind == 'array2d' then
+		 return typestr(t.t) .. '[' .. t.w .. ',' .. t.h .. ']'
+	  elseif t.kind == 'uint' then
+		 return 'uint' .. t.n
+	  else
+		 return tostring(t)
+	  end
+   end
+   
    -- unique id generator
    local id = 0
    local function newid()
@@ -41,6 +51,28 @@ local function graph_view(l)
 
    function a.apply(l)
 	  dot:node(ids[l], l.m.kind)
+	  a(l.v)
+	  dot:edge(ids[l.v], ids[l])
+	  return ids[l]
+   end
+
+   function a.concat(l)
+	  dot:node(ids[l], l.kind)
+	  for _,v in ipairs(l.vs) do
+		 a(v)
+		 dot:edge(ids[v], ids[l])
+	  end
+	  
+	  return ids[l]
+   end
+
+   function a.input(l)
+	  dot:node(ids[l], l.kind.. '\\n' .. typestr(l.type))
+	  return ids[l]
+   end
+
+   function a.const(l)
+	  dot:node(ids[l], l.kind)
 	  return ids[l]
    end
 
@@ -65,17 +97,11 @@ local function graph_view(l)
 	  -- restore graph state
 	  dot = old
 
-	  -- connect input to body
-	  dot:edge(ids[l.x], ids[l.f])
-
-	  -- return the first node of the apply
-	  return ids[l.f]
+	  -- return the input to the apply
+	  return ids[l.x]
    end
-
    
    a(l)
-
-   print(inspect(dot))
 
    dot:write('dbg/graph.dot')
    --    -- dot:compile('dbg/graph.dot', 'png')

@@ -4,7 +4,7 @@ local C = require 'examplescommon'
 
 local to_handshake = require 'betelgeuse.passes.to_handshake'
 
-local _VERBOSE = true
+local _VERBOSE = false
 
 local function linenum(level)
    return debug.getinfo(level or 2, 'l').currentline
