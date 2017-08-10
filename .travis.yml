@@ -21,6 +21,7 @@ before_install:
   - git submodule update --init
 
 install:
+  - mkdir dbg
   - mkdir out
 
 script:

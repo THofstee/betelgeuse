@@ -104,12 +104,6 @@ local function graph_view(l)
    a(l)
 
    dot:write('dbg/graph.dot')
-   --    -- dot:compile('dbg/graph.dot', 'png')
-   
-   --    -- -- print(inspect(r, options))
-   dot:render('dbg/graph.dot', 'png')
-   -- assert(false)
-   
 end
 
 -- local function graph_view(r)
