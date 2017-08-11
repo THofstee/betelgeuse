@@ -19,31 +19,27 @@ local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
 -- utilization
-local elem_rate = { 1, 4 }
-local util = P.reduction_factor(mod, elem_rate)
+local rates = {
+   { 1, 16 },
+   { 1,  8 },
+   { 1,  4 },
+   { 1,  2 },
+   { 1,  1 },
+   { 2,  1 },
+   { 4,  1 }
+}
 
--- passes
-local res
-res = P.translate(mod)
-res = P.streamify(res, elem_rate)
-res = P.transform(res, util)
-res = P.peephole(res)
-print('--- Peephole ---')
-P.rates(res)
-
--- passes v2
-local res
-res = P.translate(mod)
-res = P.transform(res, util)
-res = P.streamify(res, elem_rate)
-res = P.peephole(res)
-print('--- Peephole ---')
-P.rates(res)
-
--- print(res:toVerilog())
+local res = {}
+for i,rate in ipairs(rates) do
+   local util = P.reduction_factor(mod, rate)
+   res[i] = P.translate(mod)
+   res[i] = P.transform(res[i], util)
+   res[i] = P.streamify(res[i], elem_rate)
+   res[i] = P.peephole(res[i])
+end
 
 R.harness{
-   fn = res,
+   fn = res[3],
    inFile = "box_32.raw", inSize = in_size,
    outFile = "updown", outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles

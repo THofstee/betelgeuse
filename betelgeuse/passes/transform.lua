@@ -422,7 +422,7 @@ function reduce_rate.upsample(m, util)
    -- @todo: hack
    in_size[2] = math.ceil(in_size[2]/util[2])
    in_size[1] = math.ceil(in_size[1]/(util[2]/(m.inputType.size[2]/in_size[2])))
-   if par ~= 1 then in_size[1] = m.scaleX*m.scaleY*in_size[1] end
+   if par ~= 1 then in_size = { par, 1 } end
 
    local in_rate = change_rate(input, in_size)
 

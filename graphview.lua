@@ -328,12 +328,13 @@ local function r_graph_view(l)
 	  return 'fifo' .. '\\n' .. typestr(m.inputType)
    end
 
-   for k,v in pairs(info) do
-	  info[k] = function(m)
-		 print(k)
-		 return v(m)
-	  end
-   end
+   -- debug info
+   -- for k,v in pairs(info) do
+   -- 	  info[k] = function(m)
+   -- 		 print(k)
+   -- 		 return v(m)
+   -- 	  end
+   -- end
 
    -- generate graph from nodes
    local a = {}
