@@ -45,3 +45,7 @@ map_par(m*n) := devectorize(m) -> map_par(n) -> vectorize(m)
 stencil(m*n) := devectorize(m) -> stencil(n) -> vectorize(m)
 
 downsample(n*m, m) := devectorize(n) -> downsample(m, 1) -> vectorize(n)
+
+
+reduce_rate(broadcast(m*n, input), k*m*n) := broadcast(1, reduce_rate(input, k)) ?
+reduce_rate(broadcast(n), m*n) := vectorize(m) -> vectorize(n)?

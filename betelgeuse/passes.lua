@@ -14,7 +14,6 @@ local R = require 'rigelSimple'
 local RM = require 'modules'
 local C = require 'examplescommon'
 local rtypes = require 'types'
-local memoize = require 'memoize'
 local L = require 'betelgeuse.lang'
 
 -- @todo: remove this after debugging
