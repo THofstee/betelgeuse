@@ -2,7 +2,7 @@ local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 
 -- convolution
-local im_size = { 32, 32 }
+local im_size = { 1920, 1080 }
 local pad_size = { im_size[1]+16, im_size[2]+3 }
 local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local pad = L.pad(8, 8, 2, 1)(I)
@@ -40,7 +40,7 @@ local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 local R = require 'rigelSimple'
 R.harness{
    fn = res,
-   inFile = "box_32.raw", inSize = in_size,
+   inFile = "1080p.raw", inSize = in_size,
    outFile = "conv", outSize = out_size,
-   earlyOverride = 48000, -- downsample is variable latency, overestimate cycles
+   earlyOverride = 48000,
 }
