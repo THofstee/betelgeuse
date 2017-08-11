@@ -1,4 +1,5 @@
 local Graphviz = require 'graphviz'
+local memoize = require 'memoize'
 
 local function str(s)
    return "\"" .. tostring(s) .. "\""
@@ -54,8 +55,22 @@ local function b_graph_view(l)
    }
    setmetatable(info, info_mt)
 
+   local a = {}
+   local a_mt = {
+	  __call = function(a, node)
+		 local node = L.unwrap(node)
+		 assert(a[node.kind], "dispatch function a." .. node.kind .. " is nil")
+		 return a[node.kind](node)
+	  end
+   }
+   setmetatable(a, a_mt)
+   
    function info.add(m)
 	  return '+'
+   end
+
+   function info.sub(m)
+	  return '-'
    end
 
    function info.mul(m)
@@ -90,26 +105,20 @@ local function b_graph_view(l)
 	  return 'stencil' .. '\\n' .. '{' .. m.offset_x .. ',' .. m.offset_y .. ',' .. m.extent_x .. ',' .. m.extent_y .. '}'
    end
 
-   -- generate graph from nodes
-   local a = {}
-   local a_mt = {
-	  __call = function(a, node)
-		 local node = L.unwrap(node)
-		 assert(a[node.kind], "dispatch function a." .. node.kind .. " is nil")
-		 return a[node.kind](node)
-	  end
-   }
-   setmetatable(a, a_mt)
+   function info.lambda(m)
+	  a(m)
+	  return 'lambda'
+   end
 
-   local inspect = require 'inspect'
+   -- generate graph from nodes
    function a.apply(l)
 	  if l.m.kind == 'lambda' then
 		 local i,o = a(l.m)
-		 dot:edge(a(l.v), i)
+		 dot:edge(a(l.v), i, str(typestr(l.v.type)))
 		 return o
 	  else
-		 dot:node(ids[l], info(l.m))		 
-		 dot:edge(a(l.v), ids[l])
+		 dot:node(ids[l], info(l.m))
+		 dot:edge(a(l.v), ids[l], str(typestr(l.v.type)))
 		 return ids[l]
 	  end
    end
@@ -117,9 +126,15 @@ local function b_graph_view(l)
    function a.concat(l)
 	  dot:node(ids[l], l.kind)
 	  for _,v in ipairs(l.vs) do
-		 dot:edge(a(v), ids[l])
+		 dot:edge(a(v), ids[l], str(typestr(v.type)))
 	  end
 	  
+	  return ids[l]
+   end
+
+   function a.index(l)
+	  dot:node(ids[l], l.kind .. '\\n' .. l.n)
+	  dot:edge(a(l.v), ids[l], str(typestr(l.v.type)))
 	  return ids[l]
    end
 
@@ -152,11 +167,12 @@ local function b_graph_view(l)
 	  -- return the input to the apply
 	  return ids[l.x], out
    end
+   a = memoize(a)
    
    a(l)
 
    dot:write('dbg/graph.dot')
-   dot:render('dbg/graph.dot')
+   -- dot:render('dbg/graph.dot')
 end
 
 local function r_graph_view(l)
@@ -424,11 +440,12 @@ local function r_graph_view(l)
 	  -- return the input to the apply
 	  return ids[l.input], out
    end
+   a = memoize(a)
 
    a(l)
 
    dot:write('dbg/graph.dot')
-   dot:render('dbg/graph.dot')
+   -- dot:render('dbg/graph.dot')
 end
 
 local function graph_view(g)

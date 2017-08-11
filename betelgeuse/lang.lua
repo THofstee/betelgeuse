@@ -19,12 +19,13 @@ Value = input(Type t)
       | const(Type t, any v)
 #      | placeholder(Type t)
       | concat(Value* vs) # @todo: it might be nice if i can index this with [n]
-#      | index(Value v) # @todo: does this need to exist?
+      | index(Value v, number n) # @todo: should this be a Module or a Value?
       | apply(Module m, Value v)
       attributes(Type type)
 
 Module = mul
        | add
+       | sub
        | map(Module m)
        | reduce(Module m)
        | zip
@@ -225,6 +226,11 @@ function L.add()
    return L_wrap(T.add(binop_type_func))
 end
 
+--- Returns a module that subtracts two primitive types.
+function L.sub()
+   return L_wrap(T.sub(binop_type_func))
+end
+
 --- Returns a module that is a map given a module to apply.
 function L.map(m)
    local m = L_unwrap(m)
@@ -336,6 +342,10 @@ function L.concat(...)
    end
    
    return T.concat(List{...}, L.tuple(t))
+end
+
+function L.index(v, n)
+   return T.index(v, n, v.t.ts[n])
 end
 
 --- Returns a compile-time constant.
