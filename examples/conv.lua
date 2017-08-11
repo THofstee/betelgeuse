@@ -44,7 +44,7 @@ for i,rate in ipairs(rates) do
    local util = P.reduction_factor(mod, rate)
    res[i] = P.translate(mod)
    res[i] = P.transform(res[i], util)
-   res[i] = P.streamify(res[i], elem_rate)
+   res[i] = P.streamify(res[i], rate)
    res[i] = P.peephole(res[i])
 end
 

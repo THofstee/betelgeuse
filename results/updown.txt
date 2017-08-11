@@ -1,0 +1,22 @@
+model,   rate, cycles, rams, slices, slice reg, slice lut, slice lut-ff, freq
+xc7z020, 1/8,  4072, 1(1%), 341(2%),  821(1%), 1148(2%), 1172(2%), 142857141
+xc7z020, 1/4,  4068, 1(1%), 345(2%),  821(1%), 1148(2%), 1175(2%), 142857141
+xc7z020, 2/5,
+xc7z020, 1/2,  error?
+xc7z020, 1/1,  2599, 1(1%), 423(3%), 1117(1%), 1433(2%), 1469(2%), 142857141
+xc7z020, 2/1,  1315, 2(1%), 485(3%), 1351(1%), 1605(3%), 1675(3%), 142857141
+xc7z020, 4/1,   673, 4(1%), 659(4%), 1823(1%), 1901(3%), 2102(3%), 124999998
+xc7z020, 8/1,  error?
+
+notes:
+- what in the world is being generated for 2/5?
+- 32x32 image: box_32.raw
+- mildly interesting since low rates introduce seq modules, but higher rates have the middle map operating on more than 1px/cycle
+- there is no linebuffer here since it's pointwise, so we get a better idea of area vs parallelism
+
+commands:
+make out/updown.axi.bmp
+cat out/updown.axi.cycles.txt
+cat out/build_updown/OUT_par.txt | grep 'Device Utilization' -A 20
+cat out/updown.realhz.txt
+feh out/updown.axi.bmp

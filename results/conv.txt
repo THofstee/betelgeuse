@@ -1,0 +1,26 @@
+model,   rate, cycles,   rams, slices, slice reg, slice lut, slice lut-ff, freq
+xc7z020, 1/32, 33177639, 3(1%),  566(4%), 1478(1%), 1785(3%), 1876(3%), 124999998
+xc7z020, 1/16, 33177639, 3(1%),  566(4%), 1478(1%), 1785(3%), 1876(3%), 124999998
+xc7z020, 1/8,  16588838, 3(1%),  576(4%), 1462(1%), 1755(3%), 1884(3%), 124999998
+xc7z020, 1/4,   8294437, 3(1%),  635(4%), 1452(1%), 1829(3%), 1961(3%), 111111110
+xc7z020, 1/2,   4147237, 3(1%),  566(4%), 1476(1%), 1960(3%), 2047(3%), 111111110
+xc7z020, 1/1,   2073636, 3(1%),  583(4%), 1261(1%), 1756(3%), 1857(3%), 124999998
+xc7z020, 2/1,   1036837, 3(1%),  538(4%), 1476(1%), 1777(3%), 1862(3%), 124999998
+xc7z020, 4/1,    518442, 3(2%),  679(5%), 1870(1%), 2236(4%), 2321(4%), 124999998
+xc7z020, 8/1,    259263, 6(4%), 1310(9%), 2374(2%), 3587(6%), 3680(6%), 124999998
+
+notes:
+- 1920x1080 image: 1920p.raw
+- actual cycles are off from verilator by <20 cycles usually
+- pad/crop have been altered to pad/crop by 0 pixels for alignment
+- when pad/crop by (8, 8, 2, 1) there's a discrepancy where 1/2 is faster than 1/1
+- 1/32 is the same as 1/16 since that's the maximum we can reasonably reduce, since we have a 4x4 stencil
+- 1/16 uses almost the same resources as 1/8, this is because the 1/16 mapping isn't completely optimal yet (esp. the constSeq + broadcast shenanigans)
+- low utilization (below 4/1) use similar resources probably because the linebuffer is the majority of the area at this point in the design
+
+commands:
+make out/conv.axi.bmp
+cat out/conv.axi.cycles.txt
+cat out/build_conv/OUT_par.txt | grep 'Device Utilization' -A 20
+cat out/conv.realhz.txt
+feh out/conv.axi.bmp

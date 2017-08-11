@@ -20,13 +20,26 @@ local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
 -- utilization
 local rates = {
-   { 1, 16 },
-   { 1,  8 },
-   { 1,  4 },
+   -- { 1, 16 },
+   -- { 1, 15 },
+   -- { 1, 14 },
+   -- { 1, 13 },
+   -- { 1, 12 },
+   -- { 1, 11 },
+   -- { 1, 10 },
+   -- { 1,  9 },
+   -- { 1,  8 },
+   -- { 1,  7 },
+   -- { 1,  6 },
+   -- { 1,  5 },
+   -- { 1,  4 },
+   -- { 1,  3 },
+   { 2,  5 }, -- wtf?
    { 1,  2 },
    { 1,  1 },
    { 2,  1 },
-   { 4,  1 }
+   -- { 3,  1 }, -- broken
+   { 4,  1 },
 }
 
 local res = {}
@@ -34,12 +47,15 @@ for i,rate in ipairs(rates) do
    local util = P.reduction_factor(mod, rate)
    res[i] = P.translate(mod)
    res[i] = P.transform(res[i], util)
-   res[i] = P.streamify(res[i], elem_rate)
+   res[i] = P.streamify(res[i], rate)
    res[i] = P.peephole(res[i])
 end
 
+local g = require 'graphview'
+g(res[1])
+
 R.harness{
-   fn = res[3],
+   fn = res[1],
    inFile = "box_32.raw", inSize = in_size,
    outFile = "updown", outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
