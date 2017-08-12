@@ -49,7 +49,9 @@ local function b_graph_view(l)
    local info_mt = {
 	  __call = function(info, node)
 		 local node = L.unwrap(node)
-		 assert(info[node.kind], "dispatch function info." .. node.kind .. " is nil")
+		 if not info[node.kind] then
+			return node.kind
+		 end
 		 return info[node.kind](node)
 	  end
    }
@@ -216,7 +218,9 @@ local function r_graph_view(l)
    local info = {}
    local info_mt = {
 	  __call = function(info, node)
-		 assert(info[node.kind], "dispatch function info." .. node.kind .. " is nil")
+		 if not info[node.kind] then
+			return node.kind
+		 end
 		 return info[node.kind](node)
 	  end
    }
@@ -326,6 +330,14 @@ local function r_graph_view(l)
 
    function info.fifo(m)
 	  return 'fifo' .. '\\n' .. typestr(m.inputType)
+   end
+
+   function info.RPassthrough(m)
+	  return 'passthrough'
+   end
+
+   function info.upsampleYSeq(m)
+	  return 'upsampleYSeq'
    end
 
    -- debug info
