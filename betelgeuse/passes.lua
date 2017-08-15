@@ -41,14 +41,6 @@ local function is_handshake(t)
    return false
 end
 
-local function unwrap_handshake(m)
-   if m.kind == 'makeHandshake' then
-	  return m.fn
-   else
-	  return m
-   end
-end
-
 local function base(m)
    local ignored = {
 	  apply = true,
@@ -294,6 +286,20 @@ local function peephole(m)
 			   -- remove redundant casts
 			   return inputs[1]
 			end
+		 elseif base(cur).generator == 'C.broadcast' then
+			-- change broadcasts to { 1, 1 } to just be casts
+			local out_size = base(cur).outputType.size
+			if out_size[1]*out_size[2] == 1 then
+			   return R.connect{
+				  input = inputs[1],
+				  toModule = R.HS(
+					 C.cast(
+						base(cur).inputType,
+						base(cur).outputType
+					 )
+				  )
+			   }
+			end
 		 end
 
 		 return R.connect{
@@ -343,11 +349,21 @@ local function peephole(m)
 		 local temp_cur = base(cur)
 		 if temp_cur.kind == 'changeRate' then
 			if temp_cur.inputRate == temp_cur.outputRate then
+			   -- remove redundant changeRates
 			   return inputs[1]
 			end
 		 elseif temp_cur.generator == 'C.cast' then
 			if temp_cur.inputType == temp_cur.outputType then
+			   -- remove redundant casts
 			   return inputs[1]
+			end
+		 elseif temp_cur.kind == 'upsampleXSeq' then
+			if base(inputs[1]).kind == 'constSeq' then
+			   -- constSeq to an upsample of the same type doesn't need upsample
+			   if base(inputs[1]).outputType == temp_cur.outputType.params.A then
+				  -- @todo: upsampleXSeq has RV type, clean this up
+				  return inputs[1]
+			   end
 			end
 		 end
 

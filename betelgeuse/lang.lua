@@ -23,9 +23,8 @@ Value = input(Type t)
       | apply(Module m, Value v)
       attributes(Type type)
 
-Module = mul
-       | add
-       | sub
+Module = add | sub | mul | div
+       | trunc(number n)
        | map(Module m)
        | reduce(Module m)
        | zip
@@ -216,19 +215,67 @@ local function binop_type_func(t)
    return t.ts[1]
 end   
 
---- Returns a module that multiplies two primitive types.
-function L.mul()
-   return L_wrap(T.mul(binop_type_func))
-end
-
+-- @todo: at some point should consider if add/sub/mul/div should take in n inputs instead of just a binop, for the sake of extending bit widths.
 --- Returns a module that adds two primitive types.
 function L.add()
+   local function type_func(t)
+	  assert(t.kind == 'tuple', 'binop requires tuple input')
+	  assert(#t.ts == 2, 'binop works on two elements')
+	  assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
+	  assert(t.ts[1].kind == 'uint', 'binop requires primitive type')
+	  return T.uint(t.ts[1].n+1)
+   end
+   
    return L_wrap(T.add(binop_type_func))
 end
 
 --- Returns a module that subtracts two primitive types.
 function L.sub()
+   local function type_func(t)
+	  assert(t.kind == 'tuple', 'binop requires tuple input')
+	  assert(#t.ts == 2, 'binop works on two elements')
+	  assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
+	  assert(t.ts[1].kind == 'uint', 'binop requires primitive type')
+	  return T.uint(t.ts[1].n)
+   end
+   
    return L_wrap(T.sub(binop_type_func))
+end
+
+--- Returns a module that multiplies two primitive types.
+function L.mul()
+   local function type_func(t)
+	  assert(t.kind == 'tuple', 'binop requires tuple input')
+	  assert(#t.ts == 2, 'binop works on two elements')
+	  assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
+	  assert(t.ts[1].kind == 'uint', 'binop requires primitive type')
+	  return T.uint(t.ts[1].n+t.ts[2].n)
+   end
+   
+   return L_wrap(T.mul(binop_type_func))
+end
+
+--- Returns a module that divides two primitive types.
+function L.div()
+   local function type_func(t)
+	  assert(t.kind == 'tuple', 'binop requires tuple input')
+	  assert(#t.ts == 2, 'binop works on two elements')
+	  assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
+	  assert(t.ts[1].kind == 'uint', 'binop requires primitive type')
+	  return T.uint(t.ts[1].n)
+   end
+   
+   return L_wrap(T.div(binop_type_func))
+end
+
+--- Truncates to n bits
+function L.trunc(n)
+   local function type_func(t)
+	  assert(t.kind == 'uint', 'truncate requires input type of int')
+	  return T.uint(n)
+   end
+   
+   return L_wrap(T.trunc(n, type_func))
 end
 
 --- Returns a module that is a map given a module to apply.
@@ -320,6 +367,11 @@ function L.uint8()
    return T.uint(8)
 end
 -- L.uint8 = T.uint(8)
+
+--- Returns an n-bit unsigned int
+function L.uint(n)
+   return T.uint(n)
+end
 
 --- A shorthand for uint(8)
 function L.int8()

@@ -348,6 +348,22 @@ local function r_graph_view(l)
    -- 	  end
    -- end
 
+   local function base(m)
+	  local ignored = {
+		 apply = true,
+		 makeHandshake = true,
+		 liftHandshake = true,
+		 liftDecimate = true,
+		 waitOnInput = true,
+	  }
+
+	  if m.fn and ignored[m.kind] then
+		 return base(m.fn)
+	  else
+		 return m
+	  end
+   end
+
    -- generate graph from nodes
    local a = {}
    local a_mt = {
@@ -360,38 +376,41 @@ local function r_graph_view(l)
 
    function a.apply(l)
 	  local HIDE_CAST = true
+	  local VERBOSE = false
+	  
 	  if HIDE_CAST then
-		 local inspect = require 'inspect'
 		 if string.find(info(l.fn) or '', 'cast') == 1 then
-			a(l.inputs[1])
-			return ids[l.inputs[1]]
+			-- if the module is a cast, just return the input
+			return a(l.inputs[1])
 		 end
-		 
-		 if l.fn.kind == 'lambda' then
-			local i,o = a(l.fn)
-			dot:edge(a(l.inputs[1]), i, str(typestr(l.type)))
-			return o
-		 end
-		 dot:node(ids[l], info(l.fn))
-
-		 if l.inputs[1] then
-			dot:edge(a(l.inputs[1]), ids[l], str(typestr(l.inputs[1].type)))
-		 end
-		 return ids[l]
-	  else
-		 if l.fn.kind == 'lambda' then
-			local i,o = a(l.fn)
-			dot:edge(a(l.inputs[1]), i, str(typestr(l.type)))
-			return o
-		 end
-		 dot:node(ids[l], info(l.fn))
-
-		 if l.inputs[1] then
-			a(l.inputs[1])
-			dot:edge(ids[l.inputs[1]], ids[l], str(typestr(l.inputs[1].type)))
-		 end
-		 return ids[l]
 	  end
+
+	  if not VERBOSE then
+		 if base(l.fn).kind == 'packTuple' then
+			-- {HS(A), HS(A)} -> HS({A, A}), so ignore it since HS not displayed
+			return a(l.inputs[1])
+		 end
+
+		 if base(l.fn).kind == 'SoAtoAoS' then
+			-- {A[1], A[1]} -> {A, A}[1] is basically a cast, so ignore it
+			local out_size = base(l.fn).outputType.size
+			if out_size[1] == 1 and out_size[2] == 1 then
+			   return a(l.inputs[1])
+			end
+		 end
+	  end
+		 
+	  if l.fn.kind == 'lambda' then
+		 local i,o = a(l.fn)
+		 dot:edge(a(l.inputs[1]), i, str(typestr(l.type)))
+		 return o
+	  end
+	  dot:node(ids[l], info(l.fn))
+
+	  if l.inputs[1] then
+		 dot:edge(a(l.inputs[1]), ids[l], str(typestr(l.inputs[1].type)))
+	  end
+	  return ids[l]
    end
 
    function a.applyMethod(l)
@@ -417,8 +436,7 @@ local function r_graph_view(l)
    function a.concat(l)
    	  dot:node(ids[l], l.kind)
    	  for _,v in ipairs(l.inputs) do
-   		 a(v)
-   		 dot:edge(ids[v], ids[l], str(typestr(v.type)))
+   		 dot:edge(a(v), ids[l], str(typestr(v.type)))
    	  end
 	  
    	  return ids[l]

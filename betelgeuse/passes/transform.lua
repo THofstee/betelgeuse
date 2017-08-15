@@ -281,6 +281,8 @@ function reduce_rate.SoAtoAoS(m, util)
 	  local hack = {}
 	  local hack2 = {}
 
+	  -- [4,4][32,32] -> [4,4][1,1] -> [1,1]
+
 	  for i,inpt in ipairs(input.inputs[1].inputs) do
 		 streams_in[i] = change_rate(inpt, { par, 1 })
 		 hack[i] = streams_in[i].type.params.A
@@ -312,6 +314,7 @@ function reduce_rate.SoAtoAoS(m, util)
 end
 
 function reduce_rate.broadcast(m, util)
+   -- @todo: broken for inputs with par > 1
    local input = reduce_rate(m.inputs[1], util)
    local m = unwrap_handshake(m.fn)
 
@@ -320,14 +323,24 @@ function reduce_rate.broadcast(m, util)
    local max_reduce = out_size[1]*out_size[2]
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
-
-   local m = C.broadcast(m.inputType, par, 1)
-
-   local inter = R.connect{
+   
+   local in_cast = R.connect{
 	  input = input,
-	  toModule = R.HS(m)
+	  toModule = R.HS(C.broadcast(m.inputType, par, 1))
    }
 
+   local inter = R.connect{
+	  input = in_cast,
+	  toModule = R.HS(
+		 R.modules.upsampleSeq{
+			type = m.inputType,
+			V = par,
+			size = { m.inputType.width, m.inputType.height },
+			scale = { out_size[1]*out_size[2], 1 }
+		 }
+	  )
+   }
+   
    return change_rate(inter, out_size)
 end
 
@@ -496,22 +509,48 @@ function reduce_rate.stencil(m, util)
 
    local par = math.ceil(size[1]*size[2] * util[1]/util[2])
    par = divisor(m.w, par)
+   
+   if util[1]*(size[1]*size[2]/par)/util[2] < 1 and par == 1 then
+	  local m = R.modules.linebuffer{
+	  	 type = m.inputType.over,
+	  	 V = par,
+	  	 size = size,
+	  	 stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
+	  }
 
-   local m = R.modules.linebuffer{
-	  type = m.inputType.over,
-	  V = par,
-	  size = size,
-	  stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
-   }
+	  assert(false, '@todo: implement the columnLinebuffer thing')
+	  -- local m = R.modules.columnLinebuffer{
+	  -- 	 type = m.inputType.over,
+	  -- 	 V = par,
+	  -- 	 size = size,
+	  -- 	 stencil = m.ymin
+	  -- }
+	  
+	  local in_rate = change_rate(input, { par, 1 })
 
-   local in_rate = change_rate(input, { par, 1 })
+	  local inter = R.connect{
+		 input = in_rate,
+		 toModule = R.HS(m)
+	  }
 
-   local inter = R.connect{
-	  input = in_rate,
-	  toModule = R.HS(m)
-   }
+	  return change_rate(inter, size)
+   else
+	  local m = R.modules.linebuffer{
+		 type = m.inputType.over,
+		 V = par,
+		 size = size,
+		 stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
+	  }
 
-   return change_rate(inter, size)
+	  local in_rate = change_rate(input, { par, 1 })
+
+	  local inter = R.connect{
+		 input = in_rate,
+		 toModule = R.HS(m)
+	  }
+
+	  return change_rate(inter, size)
+   end
 end
 
 function reduce_rate.packTuple(m, util)
