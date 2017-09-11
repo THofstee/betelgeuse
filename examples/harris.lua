@@ -62,13 +62,15 @@ local A12 = L.map(L.reduce(L.add()))(IxIy)
 local A21 = A12
 local A22 = L.map(L.reduce(L.add()))(IyIy)
 
+local diag = L.zip()(L.concat(A11, A22))
+
 -- calculate det(A)
-local d1 = L.map(L.mul())(L.zip()(L.concat(A11, A22)))
+local d1 = L.map(L.mul())(diag)
 local d2 = L.map(L.mul())(L.zip()(L.concat(A12, A21)))
 local det = L.map(L.sub())(L.zip()(L.concat(d1, d2)))
 
 -- calculate k*tr(A)^2
-local tr = L.map(L.add())(L.zip()(L.concat(A11, A22)))
+local tr = L.map(L.add())(diag)
 local tr2 = L.map(L.mul())(L.zip()(L.concat(tr, tr)))
 local ktr2 = L.map(L.div())(L.zip()(L.concat(tr2, L.broadcast(im_size[1], im_size[2])(L.const(L.uint8(), 20)))))
 

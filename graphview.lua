@@ -174,7 +174,7 @@ local function b_graph_view(l)
    a(l)
 
    dot:write('dbg/graph.dot')
-   -- dot:render('dbg/graph.dot')
+   dot:render('dbg/graph.dot')
 end
 
 local function r_graph_view(l)
