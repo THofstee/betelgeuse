@@ -56,7 +56,6 @@ local function base(m)
 	  return m
    end
 end
-
 P.base = base
 
 -- @todo: should make this a class method in lang

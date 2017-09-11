@@ -24,12 +24,15 @@ Value = input(Type t)
       attributes(Type type)
 
 Module = add | sub | mul | div
+       | shift(number n)
        | trunc(number n)
        | map(Module m)
        | reduce(Module m)
        | zip
        | stencil(number offset_x, number offset_y, number extent_x, number extent_y)
        | gather_stencil(number w, number y)
+#       | partition_x(number n)
+#       | partition_y(number n)
        | pad(number left, number right, number top, number bottom)
        | crop(number left, number right, number top, number bottom)
        | upsample(number x, number y)
@@ -211,6 +214,7 @@ local function binop_type_func(t)
    assert(t.kind == 'tuple', 'binop requires tuple input')
    assert(#t.ts == 2, 'binop works on two elements')
    assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
+   assert(t.ts[1].n == t.ts[2].n, 'binop requires both elements in tuple to have same precision')
    assert(t.ts[1].kind == 'uint', 'binop requires primitive type')
    return t.ts[1]
 end   
@@ -266,6 +270,16 @@ function L.div()
    end
    
    return L_wrap(T.div(binop_type_func))
+end
+
+--- Returns a module that shifts by n bits
+function L.shift(n)
+   local function type_func(t)
+	  assert(t.kind == 'uint', 'shift requires integer input')
+	  return t
+   end
+   
+   return L_wrap(T.shift(n, type_func))
 end
 
 --- Truncates to n bits
@@ -370,6 +384,7 @@ end
 
 --- Returns an n-bit unsigned int
 function L.uint(n)
+   -- @todo: should default to -1 and then try to propagate bit width through?
    return T.uint(n)
 end
 
@@ -408,7 +423,7 @@ end
 --- Creates a module given a value and an input variable.
 function L.lambda(f, x)
    local function type_func(t)
-	  assert(tostring(x.type) == tostring(t))
+	  assert(tostring(x.type) == tostring(t), 'lambda expected ' .. tostring(x.type) .. ' but found ' .. tostring(t))
 	  return f.type
    end
 

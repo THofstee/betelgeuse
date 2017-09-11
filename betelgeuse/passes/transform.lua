@@ -22,9 +22,17 @@ local function is_handshake(t)
    return false
 end
 
-local function unwrap_handshake(m)
-   if m.kind == 'makeHandshake' then
-	  return m.fn
+local function base(m)
+   local ignored = {
+	  apply = true,
+	  makeHandshake = true,
+	  liftHandshake = true,
+	  liftDecimate = true,
+	  waitOnInput = true,
+   }
+
+   if m.fn and ignored[m.kind] then
+	  return base(m.fn)
    else
 	  return m
    end
@@ -155,6 +163,11 @@ function reduce_rate.input(m, util)
 end
 
 function reduce_rate.concat(m, util)
+   for i,input in ipairs(m.inputs) do
+	  local in_type = base(input).outputType
+	  print(inspect(in_type, {depth = 2}))
+   end
+
    local inputs = {}
    for i,input in ipairs(m.inputs) do
 	  inputs[i] = reduce_rate(input, util)
@@ -172,7 +185,7 @@ function reduce_rate.map(m, util)
 	  input = reduce_rate(m.inputs[1], util)
    end
 
-   local m = unwrap_handshake(m.fn)
+   local m = base(m.fn)
    local t = m.inputType
    local w = m.W
    local h = m.H
@@ -211,7 +224,7 @@ function reduce_rate.map(m, util)
 
 		 -- @todo: commented out lines meant for par > 1, where we still need outer map but operating over a rate reduced inner module
 		 -- m = R.modules.map{
-		 --		fn = unwrap_handshake(m2.fn),
+		 --		fn = base(m2.fn),
 		 --		size = { par }
 		 -- }
 
@@ -316,7 +329,7 @@ end
 function reduce_rate.broadcast(m, util)
    -- @todo: broken for inputs with par > 1
    local input = reduce_rate(m.inputs[1], util)
-   local m = unwrap_handshake(m.fn)
+   local m = base(m.fn)
 
    local out_size = m.outputType.size
 
@@ -346,7 +359,7 @@ end
 
 function reduce_rate.lift(m, util)
    -- certain modules need to be reduced, but are implemented as lifts
-   if unwrap_handshake(m.fn).generator == 'C.broadcast' then
+   if base(m.fn).generator == 'C.broadcast' then
 	  return reduce_rate.broadcast(m, util)
    end
 
@@ -359,7 +372,7 @@ end
 
 function reduce_rate.pad(m, util)
    local input = reduce_rate(m.inputs[1], util)
-   local m = unwrap_handshake(m.fn)
+   local m = base(m.fn)
 
    local t = m.inputType
    local w = m.width
@@ -392,7 +405,7 @@ function reduce_rate.crop(m, util)
    local input = reduce_rate(m.inputs[1], util)
 
    -- @todo: double check implementation
-   local m = unwrap_handshake(m.fn)
+   local m = base(m.fn)
 
    local t = m.inputType
    local w = m.width
@@ -423,7 +436,7 @@ end
 function reduce_rate.upsample(m, util)
    -- @todo: change to be upsampleY first then upsampleX, once implemented
    local input = reduce_rate(m.inputs[1], util)
-   local m = unwrap_handshake(m.fn)
+   local m = base(m.fn)
 
    -- @todo: divide by util to figure out output element type
    -- @todo: sample for downsample
@@ -457,7 +470,7 @@ end
 
 function reduce_rate.downsample(m, util)
    local input = reduce_rate(m.inputs[1], util)
-   local m = unwrap_handshake(m.fn)
+   local m = base(m.fn)
 
    local in_size = m.inputType.size
    local par = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
@@ -496,7 +509,7 @@ function reduce_rate.stencil(m, util)
    print('@todo: fixme', m.kind, linenum())
    local input = reduce_rate(m.inputs[1], util)
 
-   local m = unwrap_handshake(m.fn)
+   local m = base(m.fn)
 
    -- @todo: hack, should move this to translate probably
    -- @todo: total hack, needs extra pad and crop
@@ -518,7 +531,7 @@ function reduce_rate.stencil(m, util)
 	  	 stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
 	  }
 
-	  assert(false, '@todo: implement the columnLinebuffer thing')
+	  -- assert(false, '@todo: implement the columnLinebuffer thing')
 	  -- local m = R.modules.columnLinebuffer{
 	  -- 	 type = m.inputType.over,
 	  -- 	 V = par,
@@ -556,7 +569,7 @@ end
 function reduce_rate.packTuple(m, util)
    local input = reduce_rate(m.inputs[1], util)
 
-   local m = unwrap_handshake(m.fn)
+   local m = base(m.fn)
 
    local hack = {}
    for i,t in ipairs(m.inputType.list) do

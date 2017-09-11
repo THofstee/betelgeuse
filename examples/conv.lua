@@ -56,7 +56,7 @@ for i,rate in ipairs(rates) do
    res[i] = P.translate(mod)
    res[i] = P.transform(res[i], util)
    res[i] = P.streamify(res[i], rate)
-   -- res[i] = P.peephole(res[i])
+   res[i] = P.peephole(res[i])
 end
 
 gv(res[1])

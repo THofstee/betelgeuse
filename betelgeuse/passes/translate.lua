@@ -87,6 +87,7 @@ translate.broadcast = memoize(translate.broadcast)
 function translate.concat(c)
    local translated = {}
    for i,v in ipairs(c.vs) do
+      print(v)
 	  translated[i] = translate(v)
    end
    return R.concat(translated)
@@ -101,13 +102,38 @@ function translate.add(m)
 end
 translate.add = memoize(translate.add)
 
+function translate.sub(m)
+   return R.modules.sum{
+	  inType = R.uint8,
+	  outType = R.uint8
+   }
+end
+translate.sub = memoize(translate.sub)
+
 function translate.mul(m)
    return R.modules.mult{
 	  inType = R.uint8,
 	  outType = R.uint8
    }
 end
-translate.add = memoize(translate.add)
+translate.mul = memoize(translate.mul)
+
+function translate.div(m)
+   return R.modules.div{
+	  inType = R.uint8,
+	  outType = R.uint8
+   }
+end
+translate.div = memoize(translate.div)
+
+function translate.shift(m)
+   return R.modules.shiftAndCast{
+      inType = R.uint8,
+      outType = R.uint8,
+      shift = m.n
+   }
+end
+translate.shift = memoize(translate.shift)
 
 function translate.reduce(m)
    return R.modules.reduce{

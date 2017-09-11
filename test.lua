@@ -12,7 +12,7 @@ local offsets = {}
 for i = 1,im_size[1] do
    offsets[i] = {}
    for j = 1,im_size[2] do
-	  offsets[i][j] = { -1, -1 }
+      offsets[i][j] = { -1, -1 }
    end
 end
 
@@ -48,8 +48,8 @@ local m = L.map(L.add())(ij)
 -- @todo: should split up generators/macros? L_wrap_macro, L_wrap_gen
 -- function make_lambda(f)
 --    return function(v)
--- 	  local input = L.input(v.type)
--- 	  return L.lambda(f(input), input)
+--    local input = L.input(v.type)
+--    return L.lambda(f(input), input)
 
 --    end
 -- end
