@@ -31,3 +31,5 @@ R.harness{
    outFile = "box_filter", outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }
+
+return mod

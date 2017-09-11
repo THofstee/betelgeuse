@@ -61,3 +61,5 @@ R.harness{
    outFile = "updown", outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }
+
+return mod

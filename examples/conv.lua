@@ -81,3 +81,5 @@ local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 --    inSize={inputW,inputH},
 --    outSize={inputW,inputH}
 -- }
+
+return mod
