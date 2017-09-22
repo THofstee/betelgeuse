@@ -69,3 +69,7 @@ P.rates(stream_out)
 local stream_out = P.handshakes(stream_out)
 print("--- After Handshake Optimization ---")
 P.rates(stream_out)
+
+local gv = require 'graphview'
+gv(m)
+gv(stream_out)

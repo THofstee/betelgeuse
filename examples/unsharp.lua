@@ -55,7 +55,7 @@ local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
 local blurred = conv()(I)
 local scaled = scale()(blurred)
 local sharp = diff(I, scaled)
-local mod = L.lambda(scaled, I)
+local mod = L.lambda(sharp, I)
 
 
 local gv = require 'graphview'
