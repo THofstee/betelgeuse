@@ -197,6 +197,11 @@ end
 translate.shift = memoize(translate.shift)
 
 function translate.reduce(m)
+   -- propagate type to module applied in reduce
+   m.m.type = m.type
+   m.m.in_type = L.tuple(m.out_type, m.out_type)
+   m.m.out_type = m.out_type
+
    return R.modules.reduce{
       fn = translate(m.m),
       size = { m.in_type.w, m.in_type.h }
@@ -273,9 +278,33 @@ function translate.apply(a)
    a.m.out_type = a.type
    a.m.in_type = a.v.type
 
+   local m = translate(a.m)
+   local v = translate(a.v)
+
+   local function cast(src, dst)
+      if src.kind ~= 'array' then
+         return C.cast(
+               src,
+               dst
+            )
+      end
+
+      return R.modules.map{
+         fn = cast(src.over, dst.over),
+         size = src.size
+      }
+   end
+
+   if v.type ~= m.inputType then
+      v = R.connect{
+         input = v,
+         toModule = cast(v.type, m.inputType)
+      }
+   end
+
    return R.connect{
-      input = translate(a.v),
-      toModule = translate(a.m)
+      input = v,
+      toModule = m
    }
 end
 translate.apply = memoize(translate.apply)

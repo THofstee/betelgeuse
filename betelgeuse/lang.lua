@@ -23,7 +23,10 @@ Value = input(Type t)
       | apply(Module m, Value v)
       attributes(Type type)
 
-Module = add | sub | mul | div
+Module = add(boolean expanding)
+       | sub(boolean expanding)
+       | mul(boolean expanding)
+       | div(boolean expanding)
        | shift(number n)
        | trunc(number n)
        | map(Module m)
@@ -108,6 +111,7 @@ end
 -- This module will return a 2d array where every element is equal to the input once applied.
 -- a -> [a]
 function L.broadcast(w, h)
+   print("WARNING: broadcast is deprecated! Map with a module instead.")
    local function type_func(t)
       return T.array2d(t, w, h)
    end
@@ -237,7 +241,7 @@ function L.add(expanding)
       end
    end
 
-   return L_wrap(T.add(type_func))
+   return L_wrap(T.add(expanding, type_func))
 end
 
 --- Returns a module that subtracts two primitive types.
@@ -262,7 +266,7 @@ function L.sub(expanding)
       end
    end
 
-   return L_wrap(T.sub(type_func))
+   return L_wrap(T.sub(expanding, type_func))
 end
 
 --- Returns a module that multiplies two primitive types.
@@ -287,7 +291,7 @@ function L.mul(expanding)
       end
    end
 
-   return L_wrap(T.mul(type_func))
+   return L_wrap(T.mul(expanding, type_func))
 end
 
 --- Returns a module that divides two primitive types.
@@ -351,7 +355,23 @@ function L.reduce(m)
 
    local function type_func(t)
       assert(is_array_type(t), 'reduce operates on arrays')
-      return m.type_func(L.tuple(t.t, t.t))
+
+      local in_type = t.t
+
+      -- if we're not expanding bits, just calculate output
+      if not m.expanding then
+         return m.type_func(L.tuple(in_type, in_type))
+      end
+
+      -- tree depth is log2 for a binop
+      local depth = math.log(t.w * t.h)/math.log(2)
+
+      -- do a tree reduction with module type function to calculate output type
+      for i=1,depth do
+         in_type = m.type_func(L.tuple(in_type, in_type))
+      end
+
+      return in_type
    end
 
    return L_wrap(T.reduce(m, type_func))
@@ -444,6 +464,9 @@ end
 --- Creates a module given a value and an input variable.
 function L.lambda(f, x)
    local function type_func(t)
+      -- @todo: should check if types are compatible, not if they completely match
+      -- types are compatible if they are equivalent and the primitive fixed
+      -- type of the value passed in is a subset of the fixed type of the input
       assert(tostring(x.type) == tostring(t), 'lambda expected ' .. tostring(x.type) .. ' but found ' .. tostring(t))
       return f.type
    end
