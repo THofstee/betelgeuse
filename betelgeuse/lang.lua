@@ -27,8 +27,8 @@ Module = add(boolean expanding)
        | sub(boolean expanding)
        | mul(boolean expanding)
        | div(boolean expanding)
-       | shift(number n)
-       | trunc(number n)
+       | shift(number n, boolean expanding)
+       | trunc(number i, number f)
        | map(Module m)
        | reduce(Module m)
        | zip
@@ -299,23 +299,30 @@ function L.div()
 end
 
 --- Returns a module that shifts by n bits
-function L.shift(n)
+function L.shift(n, expanding)
+   local expanding = expanding or false
+
    local function type_func(t)
-      assert(t.kind == 'fixed', 'shift requires integer input')
-      return t
+      assert(t.kind == 'fixed', 'shift requires fixed point input')
+      if expanding then
+         return L.fixed(t.s, t.i - n, t.f + n)
+      else
+         return t
+      end
    end
 
-   return L_wrap(T.shift(n, type_func))
+   return L_wrap(T.shift(n, expanding, type_func))
 end
 
---- Truncates to n bits
-function L.trunc(n)
+--- Truncates to i integer and f fractional bits
+function L.trunc(i, f)
    local function type_func(t)
-      assert(is_fixed_type(t), 'truncate requires primitive input type')
-      return T.uint(n)
+      assert(is_primitive_type(t), 'truncate requires primitive input type')
+      assert(t.i >= i and t.f >= f, 'truncate cannot expand types')
+      return L.fixed(t.s, i, f)
    end
 
-   return L_wrap(T.trunc(n, type_func))
+   return L_wrap(T.trunc(i, f, type_func))
 end
 
 --- Returns a module that is a map given a module to apply.

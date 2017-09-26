@@ -16,10 +16,10 @@ local pad = L.pad(0, 0, 0, 0)(I)
 -- local pad = L.pad(8, 8, 2, 1)(I)
 local st = L.stencil(-1, -1, 4, 4)(pad)
 local taps = L.const(L.array2d(L.uint8(), 4, 4), {
-						{  4, 14, 14,  4 },
-						{ 14, 32, 32, 14 },
-						{ 14, 32, 32, 14 },
-						{  4, 14, 14,  4 }})
+                        {  4, 14, 14,  4 },
+                        { 14, 32, 32, 14 },
+                        { 14, 32, 32, 14 },
+                        {  4, 14, 14,  4 }})
 local wt = L.broadcast(pad_size[1], pad_size[2])(taps)
 local st_wt = L.zip_rec()(L.concat(st, wt))
 local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
@@ -30,6 +30,7 @@ local mod = L.lambda(m, I)
 
 local gv = require 'graphview'
 gv(mod)
+os.execute('dot -Tpng dbg/graph.dot -o dbg/graph.png' and 'feh dbg/graph.png')
 -- assert(false)
 
 -- @todo: replace consts with

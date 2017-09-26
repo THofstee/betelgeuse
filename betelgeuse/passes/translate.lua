@@ -164,37 +164,99 @@ end
 translate.add = memoize(translate.add)
 
 function translate.sub(m)
-   return R.modules.sub{
-      inType = R.uint8,
-      outType = R.uint8
+   -- figure out what width the inputs need to be
+   local int_bits = math.max(m.in_type.ts[1].i, m.in_type.ts[2].i)
+   local frac_bits = math.max(m.in_type.ts[1].f, m.in_type.ts[2].f)
+   local in_width = int_bits + frac_bits
+
+   -- figure out the output width
+   local out_width = m.out_type.i + m.out_type.f
+
+   -- we need to do a bit of processing on the input
+   local input = R.input(translate(m.in_type))
+
+   -- split up the input tuple
+   local in1 = R.index{
+      input = input,
+      key = 0
+   }
+
+   local in2 = R.index{
+      input = input,
+      key = 1
+   }
+
+   -- align the decimal point and cast to the right size
+   local in1_shift = R.connect{
+      input = in1,
+      toModule = R.modules.shiftAndCast{
+         inType = in1.type,
+         outType = rtypes.uint(in_width),
+         shift = -(frac_bits - m.in_type.ts[1].f)
+      }
+   }
+
+   local in2_shift = R.connect{
+      input = in2,
+      toModule = R.modules.shiftAndCast{
+         inType = in2.type,
+         outType = rtypes.uint(in_width),
+         shift = -(frac_bits - m.in_type.ts[2].f)
+      }
+   }
+
+   -- concatenate aligned inputs
+   local concat = R.concat{in1_shift, in2_shift}
+
+   -- now we can just sum like an integer
+   local output = R.connect{
+      input = concat,
+      toModule = R.modules.sub{
+         inType = rtypes.uint(in_width),
+         outType = rtypes.uint(out_width)
+      }
+   }
+
+   -- return this new module
+   return R.defineModule{
+      input = input,
+      output = output
    }
 end
 translate.sub = memoize(translate.sub)
 
 function translate.mul(m)
    return R.modules.mult{
-      inType = R.uint8,
-      outType = R.uint8
+      inType = translate(m.in_type),
+      outType = translate(m.out_type)
    }
 end
 translate.mul = memoize(translate.mul)
 
 function translate.div(m)
    return R.modules.div{
-      inType = R.uint8,
-      outType = R.uint8
+      inType = translate(m.in_type),
+      outType = translate(m.out_type)
    }
 end
 translate.div = memoize(translate.div)
 
 function translate.shift(m)
    return R.modules.shiftAndCast{
-      inType = R.uint8,
-      outType = R.uint8,
+      inType = translate(m.in_type),
+      outType = translate(m.out_type),
       shift = m.n
    }
 end
 translate.shift = memoize(translate.shift)
+
+function translate.trunc(m)
+   return C.cast(
+      translate(m.in_type),
+      translate(m.out_type)
+   )
+end
+translate.trunc = memoize(translate.trunc)
 
 function translate.reduce(m)
    -- propagate type to module applied in reduce

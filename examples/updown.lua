@@ -2,6 +2,10 @@ local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 local R = require 'rigelSimple'
 
+-- parse command line args
+args = { ... }
+rate = { tonumber(args[1]) or 1, tonumber(args[2]) or 1 }
+
 -- map -> upsample -> map -> downsample -> map
 local x = L.input(L.uint8())
 local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
@@ -18,45 +22,15 @@ local mod = L.lambda(x5, x0)
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
--- utilization
-local rates = {
-   -- { 1, 16 },
-   -- { 1, 15 },
-   -- { 1, 14 },
-   -- { 1, 13 },
-   -- { 1, 12 },
-   -- { 1, 11 },
-   -- { 1, 10 },
-   -- { 1,  9 },
-   -- { 1,  8 },
-   -- { 1,  7 },
-   -- { 1,  6 },
-   -- { 1,  5 },
-   -- { 1,  4 },
-   -- { 1,  3 },
-   -- { 2,  5 }, -- wtf?
-   -- { 1,  2 },
-   { 1,  1 },
-   { 2,  2 },
-   { 2,  1 },
-   -- { 3,  1 }, -- broken
-   { 4,  1 },
-}
-
-local res = {}
-for i,rate in ipairs(rates) do
-   local util = P.reduction_factor(mod, rate)
-   res[i] = P.translate(mod)
-   res[i] = P.transform(res[i], util)
-   res[i] = P.streamify(res[i], rate)
-   res[i] = P.peephole(res[i])
-end
-
-local g = require 'graphview'
-g(res[1])
+local res
+local util = P.reduction_factor(mod, rate)
+res = P.translate(mod)
+res = P.transform(res, util)
+res = P.streamify(res, rate)
+res = P.peephole(res)
 
 R.harness{
-   fn = res[1],
+   fn = res,
    inFile = "box_32.raw", inSize = in_size,
    outFile = "updown", outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
