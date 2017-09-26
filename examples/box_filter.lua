@@ -4,7 +4,7 @@ local R = require 'rigelSimple'
 
 -- box filter
 local im_size = { 32, 32 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 local pad = L.pad(8, 8, 2, 1)(I)
 local st = L.stencil(-1, -1, 4, 4)(pad)
 local conv = L.map(L.reduce(L.add(true)))

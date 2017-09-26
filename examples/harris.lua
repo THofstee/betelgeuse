@@ -2,22 +2,22 @@ local L = require 'betelgeuse.lang'
 
 local im_size = { 1920, 1080 }
 
-local dx = L.const(L.array2d(L.uint8(), 3, 3), {
+local dx = L.const(L.array2d(L.fixed(9, 0), 3, 3), {
                       { 1, 0, -1 },
                       { 2, 0, -2 },
                       { 1, 0, -1 }})
 
-local dy = L.const(L.array2d(L.uint8(), 3, 3), {
+local dy = L.const(L.array2d(L.fixed(9, 0), 3, 3), {
                       {  1,  2,  1 },
                       {  0,  0,  0 },
                       { -1, -2, -1 }})
 
-local gaussian = L.const(L.array2d(L.uint8(), 3, 3), {
+local gaussian = L.const(L.array2d(L.fixed(9, 0), 3, 3), {
                       { 20, 32, 20 },
                       { 32, 48, 32 },
                       { 20, 32, 20 }})
 
--- local gaussian = L.const(L.array2d(L.uint8(), 5, 5), {
+-- local gaussian = L.const(L.array2d(L.fixed(9, 0), 5, 5), {
 --                       { 1,  4,  6,  4, 1 },
 --                       { 4, 15, 24, 15, 4 },
 --                       { 6, 24, 40, 24, 6 },
@@ -27,7 +27,7 @@ local gaussian = L.const(L.array2d(L.uint8(), 3, 3), {
 local function conv(taps)
    local pad_size = im_size
    -- local pad_size = { im_size[1]+16, im_size[2]+3 }
-   local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+   local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
    local pad = L.pad(0, 0, 0, 0)(I)
    -- local pad = L.pad(8, 8, 2, 1)(I)
    local st = L.stencil(-1, -1, 3, 3)(pad)
@@ -41,7 +41,7 @@ local function conv(taps)
    return mod
 end
 
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 
 -- compute image gradients
 local Ix = conv(dx)(I)
@@ -72,7 +72,7 @@ local det = L.map(L.sub())(L.zip()(L.concat(d1, d2)))
 -- calculate k*tr(A)^2
 local tr = L.map(L.add())(diag)
 local tr2 = L.map(L.mul())(L.zip()(L.concat(tr, tr)))
-local ktr2 = L.map(L.div())(L.zip()(L.concat(tr2, L.broadcast(im_size[1], im_size[2])(L.const(L.uint8(), 20)))))
+local ktr2 = L.map(L.div())(L.zip()(L.concat(tr2, L.broadcast(im_size[1], im_size[2])(L.const(L.fixed(9, 0), 20)))))
 
 -- corner response = det(A)-k*tr(A)^2
 local Mc = L.map(L.sub())(L.zip()(L.concat(det, ktr2)))

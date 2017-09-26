@@ -2,11 +2,11 @@ local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 
 -- map -> upsample -> map
-local x = L.input(L.uint8())
-local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
+local x = L.input(L.fixed(9, 0))
+local add_c = L.lambda(L.add()(L.concat(x, L.const(L.fixed(9, 0), 30))), x)
 
 local im_size = { 2, 4 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 local J = L.upsample(2, 1)(L.map(add_c)(I))
 local K = L.map(add_c)(J)
 local mod = L.lambda(K, I)

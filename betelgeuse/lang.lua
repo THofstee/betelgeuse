@@ -10,8 +10,7 @@ local L = {}
 
 local T = asdl.NewContext()
 T:Define [[
-# split into sfixed/ufixed or use a boolean signed field?
-Type = fixed(boolean s, number i, number f)
+Type = fixed(number i, number f)
      | tuple(Type* ts)
      | array2d(Type t, number w, number h)
 
@@ -29,7 +28,6 @@ Module = add(boolean expanding)
        | div(boolean expanding)
        | shift(number n, boolean expanding)
        | trunc(number i, number f)
-       | to_signed()
        | map(Module m)
        | reduce(Module m)
        | zip
@@ -43,8 +41,6 @@ Module = add(boolean expanding)
        | downsample(number x, number y)
 # @todo: try to figure out how to remove broadcast entirely, or at least w/h
        | broadcast(number w, number h)
-# @todo: consider changing multiply etc to use the lift feature and lift systolic
-# @todo: if we had lift, then there wouldn't be a need for streamify in the high level language?
 #       | lift # @todo: this should raise rigel modules into this language
        | lambda(Value f, input x)
        attributes(function type_func)
@@ -228,16 +224,13 @@ function L.add(expanding)
       assert(t.kind == 'tuple', 'binop requires tuple input')
       assert(#t.ts == 2, 'binop works on two elements')
       assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
-      assert(t.ts[1].s == t.ts[2].s, 'binop requires both elements in tuple to have same signedness')
       assert(is_primitive_type(t.ts[1]), 'binop requires input to be primitive type but was ' .. t.ts[1].kind)
 
       if (expanding) then
-         return L.fixed(t.ts[1].s,
-                        math.max(t.ts[1].i, t.ts[2].i) + 1,
+         return L.fixed(math.max(t.ts[1].i, t.ts[2].i) + 1,
                         math.max(t.ts[1].f, t.ts[2].f))
       else
-         return L.fixed(t.ts[1].s,
-                        math.max(t.ts[1].i, t.ts[2].i),
+         return L.fixed(math.max(t.ts[1].i, t.ts[2].i),
                         math.max(t.ts[1].f, t.ts[2].f))
       end
    end
@@ -253,16 +246,13 @@ function L.sub(expanding)
       assert(t.kind == 'tuple', 'binop requires tuple input')
       assert(#t.ts == 2, 'binop works on two elements')
       assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
-      assert(t.ts[1].s == t.ts[2].s, 'binop requires both elements in tuple to have same signedness')
       assert(is_primitive_type(t.ts[1]), 'binop requires input to be primitive type but was ' .. t.ts[1].kind)
 
-      if (t.ts[1].s and expanding) then
-         return L.fixed(t.ts[1].s,
-                        math.max(t.ts[1].i, t.ts[2].i) + 1,
+      if (expanding) then
+         return L.fixed(math.max(t.ts[1].i, t.ts[2].i) + 1,
                         math.max(t.ts[1].f, t.ts[2].f))
       else
-         return L.fixed(t.ts[1].s,
-                        math.max(t.ts[1].i, t.ts[2].i),
+         return L.fixed(math.max(t.ts[1].i, t.ts[2].i),
                         math.max(t.ts[1].f, t.ts[2].f))
       end
    end
@@ -278,16 +268,13 @@ function L.mul(expanding)
       assert(t.kind == 'tuple', 'binop requires tuple input')
       assert(#t.ts == 2, 'binop works on two elements')
       assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
-      assert(t.ts[1].s == t.ts[2].s, 'binop requires both elements in tuple to have same signedness')
       assert(is_primitive_type(t.ts[1]), 'binop requires input to be primitive type but was ' .. t.ts[1].kind)
 
       if (expanding) then
-         return L.fixed(t.ts[1].s,
-                        math.max(t.ts[1].i, t.ts[2].i) * 2,
+         return L.fixed(math.max(t.ts[1].i, t.ts[2].i) * 2,
                         math.max(t.ts[1].f, t.ts[2].f) * 2)
       else
-         return L.fixed(t.ts[1].s,
-                        math.max(t.ts[1].i, t.ts[2].i),
+         return L.fixed(math.max(t.ts[1].i, t.ts[2].i),
                         math.max(t.ts[1].f, t.ts[2].f))
       end
    end
@@ -296,7 +283,25 @@ function L.mul(expanding)
 end
 
 --- Returns a module that divides two primitive types.
-function L.div()
+function L.div(expanding)
+   local expanding = expanding or false
+
+   local function type_func(t)
+      assert(t.kind == 'tuple', 'binop requires tuple input')
+      assert(#t.ts == 2, 'binop works on two elements')
+      assert(t.ts[1].kind == t.ts[2].kind, 'binop requires both elements in tuple to be of same type')
+      assert(is_primitive_type(t.ts[1]), 'binop requires input to be primitive type but was ' .. t.ts[1].kind)
+
+      if (expanding) then
+         return L.fixed(math.max(t.ts[1].i, t.ts[2].i) * 2,
+                        math.max(t.ts[1].f, t.ts[2].f) * 2)
+      else
+         return L.fixed(math.max(t.ts[1].i, t.ts[2].i),
+                        math.max(t.ts[1].f, t.ts[2].f))
+      end
+   end
+
+   return L_wrap(T.div(expanding, type_func))
 end
 
 --- Returns a module that shifts by n bits
@@ -306,7 +311,7 @@ function L.shift(n, expanding)
    local function type_func(t)
       assert(t.kind == 'fixed', 'shift requires fixed point input')
       if expanding then
-         return L.fixed(t.s, t.i - n, t.f + n)
+         return L.fixed(t.i - n, t.f + n)
       else
          return t
       end
@@ -320,24 +325,10 @@ function L.trunc(i, f)
    local function type_func(t)
       assert(is_primitive_type(t), 'truncate requires primitive input type')
       assert(t.i >= i and t.f >= f, 'truncate cannot expand types')
-      return L.fixed(t.s, i, f)
+      return L.fixed(i, f)
    end
 
    return L_wrap(T.trunc(i, f, type_func))
-end
-
---- Converts a module to signed fixed point
-function L.to_signed()
-   local function type_func(t)
-      assert(is_primitive_type(t), 'truncate requires primitive input type')
-      if not t.s then
-         return L.fixed(true, t.i+1, t.f)
-      else
-         return t
-      end
-   end
-
-   return L_wrap(T.to_signed(type_func))
 end
 
 --- Returns a module that is a map given a module to apply.
@@ -434,30 +425,8 @@ function L.tuple(...)
    end
 end
 
-function L.fixed(s, i, f)
-   if s == false then
-      print('WARNING: unsigned fixed point is deprecated!')
-   end
-
-   return T.fixed(s, i, f)
-end
-
---- A shorthand for uint(32)
-function L.uint32()
-   return L.fixed(false, 32, 0)
-end
--- L.uint32 = T.uint(32)
-
---- A shorthand for uint(8)
-function L.uint8()
-   return L.fixed(false, 8, 0)
-end
--- L.uint8 = T.uint(8)
-
---- Returns an n-bit unsigned int
-function L.uint(n)
-   -- @todo: should default to -1 and then try to propagate bit width through?
-   return T.fixed(false, n, 0)
+function L.fixed(i, f)
+   return T.fixed(i, f)
 end
 
 -- --- A placeholder that can be replaced later.

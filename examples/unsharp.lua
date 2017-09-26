@@ -5,11 +5,11 @@ local im_size = { 1920, 1080 }
 local function conv()
    local pad_size = im_size
    -- local pad_size = { im_size[1]+16, im_size[2]+3 }
-   local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+   local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
    local pad = L.pad(0, 0, 0, 0)(I)
    -- local pad = L.pad(8, 8, 2, 1)(I)
    local st = L.stencil(-1, -1, 4, 4)(pad)
-   local taps = L.const(L.array2d(L.uint8(), 4, 4), {
+   local taps = L.const(L.array2d(L.fixed(9, 0), 4, 4), {
                            {  4, 14, 14,  4 },
                            { 14, 32, 32, 14 },
                            { 14, 32, 32, 14 },
@@ -27,20 +27,20 @@ end
 local function scale()
    local function div()
       local factor = 16
-      local x = L.input(L.uint8())
-      local c = L.const(L.uint8(), factor)
+      local x = L.input(L.fixed(9, 0))
+      local c = L.const(L.fixed(9, 0), factor)
       local div = L.lambda(L.div()(L.concat(x, c)), x)
       return div
    end
 
    local function shr()
       local factor = 4
-      local x = L.input(L.uint8())
+      local x = L.input(L.fixed(9, 0))
       local shr = L.lambda(L.shift(factor)(x), x)
       return shr
    end
 
-   local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+   local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
    local mod = L.lambda(L.map(shr())(I), I)
    return mod
 end
@@ -51,7 +51,7 @@ local function diff(I, J)
    return diff
 end
 
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 local blurred = conv()(I)
 local scaled = scale()(blurred)
 local sharp = diff(I, scaled)

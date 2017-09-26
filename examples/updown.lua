@@ -7,11 +7,11 @@ args = { ... }
 rate = { tonumber(args[1]) or 1, tonumber(args[2]) or 1 }
 
 -- map -> upsample -> map -> downsample -> map
-local x = L.input(L.uint8())
-local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
+local x = L.input(L.fixed(9, 0))
+local add_c = L.lambda(L.add()(L.concat(x, L.const(L.fixed(9, 0), 30))), x)
 
 local im_size = { 32, 32 }
-local x0 = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local x0 = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 local x1 = L.map(add_c)(x0)
 local x2 = L.upsample(2, 2)(x1)
 local x3 = L.map(add_c)(x2)

@@ -2,12 +2,12 @@ local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 local R = require 'rigelSimple'
 
-local x = L.input(L.uint8())
-local add_c = L.lambda(L.add()(L.concat(x, L.const(L.uint8(), 30))), x)
+local x = L.input(L.fixed(9, 0))
+local add_c = L.lambda(L.add()(L.concat(x, L.const(L.fixed(9, 0), 30))), x)
 
 -- map -> pad -> map -> crop -> map
 local im_size = { 32, 32 }
-local x0 = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+local x0 = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 local x1 = L.map(add_c)(x0)
 local x2 = L.pad(8, 8, 2, 1)(x1)
 local x3 = L.map(add_c)(x2)

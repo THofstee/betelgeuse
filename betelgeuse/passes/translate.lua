@@ -27,11 +27,7 @@ end
 translate.array2d = memoize(translate.array2d)
 
 function translate.fixed(t)
-   if t.s then
-      return rtypes.int(t.i + t.f)
-   else
-      return rtypes.uint(t.i + t.f)
-   end
+   return rtypes.int(t.i + t.f)
 end
 translate.fixed = memoize(translate.fixed)
 
@@ -133,7 +129,7 @@ function translate.add(m)
       input = in1,
       toModule = R.modules.shiftAndCast{
          inType = in1.type,
-         outType = rtypes.uint(in_width),
+         outType = rtypes.int(in_width),
          shift = -(frac_bits - m.in_type.ts[1].f)
       }
    }
@@ -142,7 +138,7 @@ function translate.add(m)
       input = in2,
       toModule = R.modules.shiftAndCast{
          inType = in2.type,
-         outType = rtypes.uint(in_width),
+         outType = rtypes.int(in_width),
          shift = -(frac_bits - m.in_type.ts[2].f)
       }
    }
@@ -154,8 +150,8 @@ function translate.add(m)
    local output = R.connect{
       input = concat,
       toModule = R.modules.sum{
-         inType = rtypes.uint(in_width),
-         outType = rtypes.uint(out_width)
+         inType = rtypes.int(in_width),
+         outType = rtypes.int(out_width)
       }
    }
 
@@ -195,7 +191,7 @@ function translate.sub(m)
       input = in1,
       toModule = R.modules.shiftAndCast{
          inType = in1.type,
-         outType = rtypes.uint(in_width),
+         outType = rtypes.int(in_width),
          shift = -(frac_bits - m.in_type.ts[1].f)
       }
    }
@@ -204,7 +200,7 @@ function translate.sub(m)
       input = in2,
       toModule = R.modules.shiftAndCast{
          inType = in2.type,
-         outType = rtypes.uint(in_width),
+         outType = rtypes.int(in_width),
          shift = -(frac_bits - m.in_type.ts[2].f)
       }
    }
@@ -216,8 +212,8 @@ function translate.sub(m)
    local output = R.connect{
       input = concat,
       toModule = R.modules.sub{
-         inType = rtypes.uint(in_width),
-         outType = rtypes.uint(out_width)
+         inType = rtypes.int(in_width),
+         outType = rtypes.int(out_width)
       }
    }
 
@@ -241,8 +237,8 @@ function translate.mul(m)
    local out_width = m.out_type.i + m.out_type.f
 
    return R.modules.mult{
-      inType = rtypes.uint(in_width),
-      outType = rtypes.uint(out_width)
+      inType = rtypes.int(in_width),
+      outType = rtypes.int(out_width)
    }
 end
 translate.mul = memoize(translate.mul)
@@ -259,8 +255,8 @@ function translate.div(m)
    local out_width = m.out_type.i + m.out_type.f
 
    return R.modules.div{
-      inType = rtypes.uint(in_width),
-      outType = rtypes.uint(out_width)
+      inType = rtypes.int(in_width),
+      outType = rtypes.int(out_width)
    }
 end
 translate.div = memoize(translate.div)

@@ -9,17 +9,17 @@ local translate = P.translate
 
 -- add constant to image (broadcast)
 local im_size = { 1920, 1080 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local c = L.const(L.uint8(), 1)
+local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
+local c = L.const(L.fixed(9, 0), 1)
 local bc = L.broadcast(im_size[1], im_size[2])(c)
 local m = L.map(L.add())(L.zip_rec()(L.concat(I, bc)))
 
 -- add constant to image (lambda)
 local im_size = { 32, 16 }
 local const_val = 30
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local x = L.input(L.uint8())
-local c = L.const(L.uint8(), const_val)
+local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
+local x = L.input(L.fixed(9, 0))
+local c = L.const(L.fixed(9, 0), const_val)
 local add_c = L.lambda(L.add()(L.concat(x, c)), x)
 local m_add = L.map(add_c)
 
@@ -27,9 +27,9 @@ local m_add = L.map(add_c)
 -- you could create a different function that would take in something like a filename and then generate these properties in the function and pass it in to the module generation
 local function create_module(size)
    local const_val = 30
-   local I = L.input(L.array2d(L.fixed(false, 8, 1), size[1], size[2]))
-   local x = L.input(L.fixed(false, 8, 1))
-   local c = L.const(L.fixed(false, 7, 0), const_val)
+   local I = L.input(L.array2d(L.fixed(8, 1), size[1], size[2]))
+   local x = L.input(L.fixed(8, 1))
+   local c = L.const(L.fixed(7, 0), const_val)
    local add_c = L.lambda(L.add()(L.concat(x, c)), x)
    local m_add = L.map(add_c)
    -- return L.lambda(m_add(I), I)
@@ -40,8 +40,8 @@ local m = create_module(im_size)
 
 -- write_file('box_out.raw', m(read_file('box_32_16.raw')))
 
-local x = L.input(L.uint8())
-local c = L.const(L.uint8(), const_val)
+local x = L.input(L.fixed(9, 0))
+local c = L.const(L.fixed(9, 0), const_val)
 local add_c = L.lambda(L.add()(L.concat(x, c)), x)
 local r2 = translate(add_c(x))
 local r3 = translate(add_c)
