@@ -27,7 +27,11 @@ end
 translate.array2d = memoize(translate.array2d)
 
 function translate.fixed(t)
-   return rtypes.uint(t.i + t.f)
+   if t.s then
+      return rtypes.int(t.i + t.f)
+   else
+      return rtypes.uint(t.i + t.f)
+   end
 end
 translate.fixed = memoize(translate.fixed)
 
@@ -226,17 +230,37 @@ end
 translate.sub = memoize(translate.sub)
 
 function translate.mul(m)
+   -- @todo: fix for fixed point
+
+   -- figure out what width the inputs need to be
+   local int_bits = math.max(m.in_type.ts[1].i, m.in_type.ts[2].i)
+   local frac_bits = math.max(m.in_type.ts[1].f, m.in_type.ts[2].f)
+   local in_width = int_bits + frac_bits
+
+   -- figure out the output width
+   local out_width = m.out_type.i + m.out_type.f
+
    return R.modules.mult{
-      inType = translate(m.in_type),
-      outType = translate(m.out_type)
+      inType = rtypes.uint(in_width),
+      outType = rtypes.uint(out_width)
    }
 end
 translate.mul = memoize(translate.mul)
 
 function translate.div(m)
+   -- @todo: fix for fixed point
+
+   -- figure out what width the inputs need to be
+   local int_bits = math.max(m.in_type.ts[1].i, m.in_type.ts[2].i)
+   local frac_bits = math.max(m.in_type.ts[1].f, m.in_type.ts[2].f)
+   local in_width = int_bits + frac_bits
+
+   -- figure out the output width
+   local out_width = m.out_type.i + m.out_type.f
+
    return R.modules.div{
-      inType = translate(m.in_type),
-      outType = translate(m.out_type)
+      inType = rtypes.uint(in_width),
+      outType = rtypes.uint(out_width)
    }
 end
 translate.div = memoize(translate.div)
@@ -251,6 +275,7 @@ end
 translate.shift = memoize(translate.shift)
 
 function translate.trunc(m)
+   print(translate(m.in_type), translate(m.out_type))
    return C.cast(
       translate(m.in_type),
       translate(m.out_type)
@@ -344,6 +369,7 @@ function translate.apply(a)
    local v = translate(a.v)
 
    local function cast(src, dst)
+      -- print(a.m.in_type, a.v.type)
       if src.kind ~= 'array' then
          return C.cast(
                src,

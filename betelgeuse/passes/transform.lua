@@ -14,9 +14,9 @@ end
 
 local function is_handshake(t)
    if t:isNamed() and t.generator == 'Handshake' then
-	  return true
+      return true
    elseif t.kind == 'tuple' and is_handshake(t.list[1]) then
-	  return true
+      return true
    end
 
    return false
@@ -24,23 +24,23 @@ end
 
 local function base(m)
    local ignored = {
-	  apply = true,
-	  makeHandshake = true,
-	  liftHandshake = true,
-	  liftDecimate = true,
-	  waitOnInput = true,
+      apply = true,
+      makeHandshake = true,
+      liftHandshake = true,
+      liftDecimate = true,
+      waitOnInput = true,
    }
 
    if m.fn and ignored[m.kind] then
-	  return base(m.fn)
+      return base(m.fn)
    else
-	  return m
+      return m
    end
 end
 
 local function get_input(m)
    while m.inputs[1] do
-	  m = m.inputs[1]
+      m = m.inputs[1]
    end
    return m
 end
@@ -48,53 +48,53 @@ end
 local function change_rate(input, out_size)
    local t = input.type
    if is_handshake(t) then
-	  t = t.params.A
+      t = t.params.A
    end
 
    local arr_t, w, h
    if t:isArray() then
-	  arr_t = t.over
-	  w = t.size[1]
-	  h = t.size[2]
+      arr_t = t.over
+      w = t.size[1]
+      h = t.size[2]
    else
-	  arr_t = t
-	  w = 1
-	  h = 1
+      arr_t = t
+      w = 1
+      h = 1
    end
 
    local in_cast = R.connect{
-	  input = input,
-	  toModule = R.HS(
-		 C.cast(
-			R.array2d(arr_t, w, h),
-			R.array2d(arr_t, w*h, 1)
-		 )
-	  )
+      input = input,
+      toModule = R.HS(
+         C.cast(
+            R.array2d(arr_t, w, h),
+            R.array2d(arr_t, w*h, 1)
+         )
+      )
    }
 
    local w_out = out_size[1]
    local h_out = out_size[2]
 
    local rate = R.connect{
-	  input = in_cast,
-	  toModule = R.HS(
-		 R.modules.changeRate{
-			type = arr_t,
-			H = 1,
-			inW = w*h,
-			outW = w_out*h_out
-		 }
-	  )
+      input = in_cast,
+      toModule = R.HS(
+         R.modules.changeRate{
+            type = arr_t,
+            H = 1,
+            inW = w*h,
+            outW = w_out*h_out
+         }
+      )
    }
 
    local output = R.connect{
-	  input = rate,
-	  toModule = R.HS(
-		 C.cast(
-			R.array2d(arr_t, w_out*h_out, 1),
-			R.array2d(arr_t, w_out, h_out)
-		 )
-	  )
+      input = rate,
+      toModule = R.HS(
+         C.cast(
+            R.array2d(arr_t, w_out*h_out, 1),
+            R.array2d(arr_t, w_out, h_out)
+         )
+      )
    }
 
    return output
@@ -105,16 +105,16 @@ end
 local function divisor(n, k)
    -- find the smallest divisor of n greater than k
    for i=k,math.floor(math.sqrt(n)) do
-	  if n%i == 0 then
-		 return i
-	  end
+      if n%i == 0 then
+         return i
+      end
    end
 
    -- find the greatest divisor of n smaller than k
    for i=k,2,-1 do
-	  if n%i == 0 then
-		 return i
-	  end
+      if n%i == 0 then
+         return i
+      end
    end
 
    -- couldn't find anything better, return 1
@@ -125,13 +125,13 @@ end
 local reduce_rate = {}
 local reduce_rate_mt = {
    __call = function(reduce_rate, m, util)
-	  -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
-	  if util[2] <= util[1] then return m end
+      -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
+      if util[2] <= util[1] then return m end
 
-	  local dispatch = m.kind
-	  if string.find(dispatch, 'lift') then return reduce_rate.lift(m, util) end
-	  assert(reduce_rate[dispatch], "dispatch function " .. dispatch .. " is nil")
-	  return reduce_rate[dispatch](m, util)
+      local dispatch = m.kind
+      if string.find(dispatch, 'lift') then return reduce_rate.lift(m, util) end
+      assert(reduce_rate[dispatch], "dispatch function " .. dispatch .. " is nil")
+      return reduce_rate[dispatch](m, util)
    end
 }
 setmetatable(reduce_rate, reduce_rate_mt)
@@ -147,8 +147,8 @@ end
 
 function reduce_rate.apply(m, util)
    -- return R.connect{
-   --	  input = reduce_rate(m.inputs[1]),
-   --	  toModule = reduce_rate(m)
+   --     input = reduce_rate(m.inputs[1]),
+   --     toModule = reduce_rate(m)
    -- }
    if string.find(m.fn.kind, 'lift') then return reduce_rate.lift(m, util) end
    return reduce_rate[m.fn.kind](m, util)
@@ -156,33 +156,33 @@ end
 
 function reduce_rate.input(m, util)
    if is_handshake(m.type) then
-	  return m
+      return m
    else
-	  return R.input(R.HS(m.type))
+      return R.input(R.HS(m.type))
    end
 end
 
 function reduce_rate.concat(m, util)
    for i,input in ipairs(m.inputs) do
-	  local in_type = base(input).outputType
-	  print(inspect(in_type, {depth = 2}))
+      local in_type = base(input).outputType
+      -- print(inspect(in_type, {depth = 2}))
    end
 
    local inputs = {}
    for i,input in ipairs(m.inputs) do
-	  inputs[i] = reduce_rate(input, util)
+      inputs[i] = reduce_rate(input, util)
    end
 
    return R.concat(inputs)
 end
 
-local dont = false
+local dont = false -- @todo: remove
 function reduce_rate.map(m, util)
    local input
    if dont then
-	  input = m.inputs[1]
+      input = m.inputs[1]
    else
-	  input = reduce_rate(m.inputs[1], util)
+      input = reduce_rate(m.inputs[1], util)
    end
 
    local m = base(m.fn)
@@ -198,80 +198,80 @@ function reduce_rate.map(m, util)
 
    if util[1]*(max_reduce/par)/util[2] < 1 and par ~= 1 then print('case of par>1 not yet implemented') end
    if util[1]*(max_reduce/par)/util[2] < 1 and par == 1 then
-	  -- we would still like to further reduce parallelism, reduce inner module
-	  local in_cast = R.connect{
-		 input = in_rate,
-		 toModule = R.HS(
-			C.cast(
-			   R.array2d(input.type.params.A.over, par, 1),
-			   input.type.params.A.over
-			)
-		 )
-	  }
+      -- we would still like to further reduce parallelism, reduce inner module
+      local in_cast = R.connect{
+         input = in_rate,
+         toModule = R.HS(
+            C.cast(
+               R.array2d(input.type.params.A.over, par, 1),
+               input.type.params.A.over
+            )
+         )
+      }
 
-	  local inter = R.connect{
-		 input = in_cast,
-		 toModule = R.HS(m.fn)
-	  }
+      local inter = R.connect{
+         input = in_cast,
+         toModule = R.HS(m.fn)
+      }
 
-	  if m.fn.kind == 'map' then
-		 -- @todo: runs into issues where the reduce_rate on the inner map starts calling reduce_rate on its inputs again........
-		 -- @todo: this is actually probably almost the wanted behavior, we push down the new utilization through the pipeline and need to adjust certain inputs, right? for example, constSeq that is an input to this module should be reduced from [16,1][1,1] to [8,1][1,1], etc.
-		 -- @todo: wouldn't have this issue if reduce_rate.map was operating on modules instead of applys
-		 -- @todo: maybe still can be on applys, but then internally theres a reduce_rate that operates on the modules, and then the outer function that works on applys still inlines everything? this way i can still keep the weird concat -> packtuple -> soatoaos thing in its own function instead of reduce_rate.apply
-		 dont = true
-		 local m2 = reduce_rate(inter, { util[1], math.floor(util[2]/max_reduce) })
+      if m.fn.kind == 'map' then
+         -- @todo: runs into issues where the reduce_rate on the inner map starts calling reduce_rate on its inputs again........
+         -- @todo: this is actually probably almost the wanted behavior, we push down the new utilization through the pipeline and need to adjust certain inputs, right? for example, constSeq that is an input to this module should be reduced from [16,1][1,1] to [8,1][1,1], etc.
+         -- @todo: wouldn't have this issue if reduce_rate.map was operating on modules instead of applys
+         -- @todo: maybe still can be on applys, but then internally theres a reduce_rate that operates on the modules, and then the outer function that works on applys still inlines everything? this way i can still keep the weird concat -> packtuple -> soatoaos thing in its own function instead of reduce_rate.apply
+         dont = true
+         local m2 = reduce_rate(inter, { util[1], math.floor(util[2]/max_reduce) })
 
-		 -- @todo: commented out lines meant for par > 1, where we still need outer map but operating over a rate reduced inner module
-		 -- m = R.modules.map{
-		 --		fn = base(m2.fn),
-		 --		size = { par }
-		 -- }
+         -- @todo: commented out lines meant for par > 1, where we still need outer map but operating over a rate reduced inner module
+         -- m = R.modules.map{
+         --		fn = base(m2.fn),
+         --		size = { par }
+         -- }
 
-		 -- local inter = R.connect{
-		 --		input = in_rate,
-		 --		toModule = R.HS(m)
-		 -- }
-		 -- dont = false
+         -- local inter = R.connect{
+         --		input = in_rate,
+         --		toModule = R.HS(m)
+         -- }
+         -- dont = false
 
-		 -- return change_rate(inter, { w, h })
-		 local out_cast = R.connect{
-			input = m2,
-			toModule = R.HS(
-			   C.cast(
-				  m2.type.params.A,
-				  R.array2d(m2.type.params.A, par, 1)
-			   )
-			)
-		 }
+         -- return change_rate(inter, { w, h })
+         local out_cast = R.connect{
+            input = m2,
+            toModule = R.HS(
+               C.cast(
+                  m2.type.params.A,
+                  R.array2d(m2.type.params.A, par, 1)
+               )
+            )
+         }
 
-		 dont = false
-		 return change_rate(out_cast, { w, h })
-	  end
+         dont = false
+         return change_rate(out_cast, { w, h })
+      end
 
-	  local out_cast = R.connect{
-		 input = inter,
-		 toModule = R.HS(
-			C.cast(
-			   inter.type.params.A,
-			   R.array2d(inter.type.params.A, par, 1)
-			)
-		 )
-	  }
+      local out_cast = R.connect{
+         input = inter,
+         toModule = R.HS(
+            C.cast(
+               inter.type.params.A,
+               R.array2d(inter.type.params.A, par, 1)
+            )
+         )
+      }
 
-	  return change_rate(out_cast, { w, h })
+      return change_rate(out_cast, { w, h })
    else
-	  m = R.modules.map{
-		 fn = m.fn,
-		 size = { par }
-	  }
+      m = R.modules.map{
+         fn = m.fn,
+         size = { par }
+      }
 
-	  local inter = R.connect{
-		 input = in_rate,
-		 toModule = R.HS(m)
-	  }
+      local inter = R.connect{
+         input = in_rate,
+         toModule = R.HS(m)
+      }
 
-	  return change_rate(inter, { w, h })
+      return change_rate(inter, { w, h })
    end
    -- @todo: the module being mapped over probably also needs to be optimized, for example recursive maps
 end
@@ -284,45 +284,45 @@ function reduce_rate.SoAtoAoS(m, util)
    local t = m.inputType
 
    if input.kind == 'apply' and input.fn.kind == 'packTuple' and input.inputs[1].kind == 'concat' then
-	  local size = m.outputType.params.A.size
+      local size = m.outputType.params.A.size
 
-	  local max_reduce = size[1]*size[2]
-	  local par = math.ceil(max_reduce * util[1]/util[2])
-	  par = divisor(max_reduce, par)
+      local max_reduce = size[1]*size[2]
+      local par = math.ceil(max_reduce * util[1]/util[2])
+      par = divisor(max_reduce, par)
 
-	  local streams_in = {}
-	  local hack = {}
-	  local hack2 = {}
+      local streams_in = {}
+      local hack = {}
+      local hack2 = {}
 
-	  -- [4,4][32,32] -> [4,4][1,1] -> [1,1]
+      -- [4,4][32,32] -> [4,4][1,1] -> [1,1]
 
-	  for i,inpt in ipairs(input.inputs[1].inputs) do
-		 streams_in[i] = change_rate(inpt, { par, 1 })
-		 hack[i] = streams_in[i].type.params.A
-		 hack2[i] = hack[i].over
-	  end
+      for i,inpt in ipairs(input.inputs[1].inputs) do
+         streams_in[i] = change_rate(inpt, { par, 1 })
+         hack[i] = streams_in[i].type.params.A
+         hack2[i] = hack[i].over
+      end
 
-	  local inter = R.connect{
-		 input = R.concat(streams_in),
-		 toModule = RM.packTuple(hack)
-	  }
+      local inter = R.connect{
+         input = R.concat(streams_in),
+         toModule = RM.packTuple(hack)
+      }
 
-	  local inter2 = R.connect{
-		 input = inter,
-		 toModule = R.HS(
-			R.modules.SoAtoAoS{
-			   type = hack2,
-			   size = { par, 1 }
-			}
-		 )
-	  }
+      local inter2 = R.connect{
+         input = inter,
+         toModule = R.HS(
+            R.modules.SoAtoAoS{
+               type = hack2,
+               size = { par, 1 }
+            }
+         )
+      }
 
-	  return change_rate(inter2, size)
+      return change_rate(inter2, size)
    end
 
    return R.connect{
-	  input = input,
-	  toModule = R.HS(m)
+      input = input,
+      toModule = R.HS(m)
    }
 end
 
@@ -336,37 +336,37 @@ function reduce_rate.broadcast(m, util)
    local max_reduce = out_size[1]*out_size[2]
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
-   
+
    local in_cast = R.connect{
-	  input = input,
-	  toModule = R.HS(C.broadcast(m.inputType, par, 1))
+      input = input,
+      toModule = R.HS(C.broadcast(m.inputType, par, 1))
    }
 
    local inter = R.connect{
-	  input = in_cast,
-	  toModule = R.HS(
-		 R.modules.upsampleSeq{
-			type = m.inputType,
-			V = par,
-			size = { m.inputType.width, m.inputType.height },
-			scale = { out_size[1]*out_size[2], 1 }
-		 }
-	  )
+      input = in_cast,
+      toModule = R.HS(
+         R.modules.upsampleSeq{
+            type = m.inputType,
+            V = par,
+            size = { m.inputType.width, m.inputType.height },
+            scale = { out_size[1]*out_size[2], 1 }
+         }
+      )
    }
-   
+
    return change_rate(inter, out_size)
 end
 
 function reduce_rate.lift(m, util)
    -- certain modules need to be reduced, but are implemented as lifts
    if base(m.fn).generator == 'C.broadcast' then
-	  return reduce_rate.broadcast(m, util)
+      return reduce_rate.broadcast(m, util)
    end
 
    -- otherwise, don't do anything
    return R.connect{
-	  input = reduce_rate(m.inputs[1], util),
-	  toModule = R.HS(m.fn)
+      input = reduce_rate(m.inputs[1], util),
+      toModule = R.HS(m.fn)
    }
 end
 
@@ -386,16 +386,16 @@ function reduce_rate.pad(m, util)
    local in_rate = change_rate(input, { par, 1 })
 
    local m = R.modules.padSeq{
-	  type = m.type,
-	  V = par,
-	  size = { w, h },
-	  pad = { m.L, m.R, m.Top, m.B },
-	  value = m.value
+      type = m.type,
+      V = par,
+      size = { w, h },
+      pad = { m.L, m.R, m.Top, m.B },
+      value = m.value
    }
 
    local inter = R.connect{
-	  input = in_rate,
-	  toModule = R.HS(m)
+      input = in_rate,
+      toModule = R.HS(m)
    }
 
    return change_rate(inter, out_size)
@@ -419,15 +419,15 @@ function reduce_rate.crop(m, util)
    local in_rate = change_rate(input, { par, 1 })
 
    m = R.modules.cropSeq{
-	  type = m.type,
-	  V = par,
-	  size = { w, h },
-	  crop = { m.L, m.R, m.Top, m.B }
+      type = m.type,
+      V = par,
+      size = { w, h },
+      crop = { m.L, m.R, m.Top, m.B }
    }
 
    local inter = R.connect{
-	  input = in_rate,
-	  toModule = R.HS(m)
+      input = in_rate,
+      toModule = R.HS(m)
    }
 
    return change_rate(inter, out_size)
@@ -454,15 +454,15 @@ function reduce_rate.upsample(m, util)
 
    -- @todo: this is not scanline order anymore really
    m = R.modules.upsampleSeq{
-	  type = m.type,
-	  V = par,
-	  size = { m.width, m.height },
-	  scale = { m.scaleX, m.scaleY }
+      type = m.type,
+      V = par,
+      size = { m.width, m.height },
+      scale = { m.scaleX, m.scaleY }
    }
 
    local inter = R.connect{
-	  input = in_rate,
-	  toModule = R.HS(m)
+      input = in_rate,
+      toModule = R.HS(m)
    }
 
    return change_rate(inter, out_size)
@@ -480,26 +480,26 @@ function reduce_rate.downsample(m, util)
    local out_size = m.outputType.size
 
    if m.scaleY == 1 then
-	  m = RM.downsampleXSeq(
-		 m.type,
-		 m.width,
-		 m.height,
-		 par,
-		 m.scaleX
-	  )
+      m = RM.downsampleXSeq(
+         m.type,
+         m.width,
+         m.height,
+         par,
+         m.scaleX
+      )
    else
-	  -- @todo: for some reason this is super slow when scaleY == 1
-	  m = R.modules.downsampleSeq{
-		 type = m.type,
-		 V = par,
-		 size = { m.width, m.height },
-		 scale = { m.scaleX, m.scaleY }
-	  }
+      -- @todo: for some reason this is super slow when scaleY == 1
+      m = R.modules.downsampleSeq{
+         type = m.type,
+         V = par,
+         size = { m.width, m.height },
+         scale = { m.scaleX, m.scaleY }
+      }
    end
 
    local inter = R.connect{
-	  input = in_rate,
-	  toModule = R.HS(m)
+      input = in_rate,
+      toModule = R.HS(m)
    }
 
    return change_rate(inter, out_size)
@@ -522,47 +522,47 @@ function reduce_rate.stencil(m, util)
 
    local par = math.ceil(size[1]*size[2] * util[1]/util[2])
    par = divisor(m.w, par)
-   
+
    if util[1]*(size[1]*size[2]/par)/util[2] < 1 and par == 1 then
-	  local m = R.modules.linebuffer{
-	  	 type = m.inputType.over,
-	  	 V = par,
-	  	 size = size,
-	  	 stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
-	  }
+      local m = R.modules.linebuffer{
+         type = m.inputType.over,
+         V = par,
+         size = size,
+         stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
+      }
 
-	  -- assert(false, '@todo: implement the columnLinebuffer thing')
-	  -- local m = R.modules.columnLinebuffer{
-	  -- 	 type = m.inputType.over,
-	  -- 	 V = par,
-	  -- 	 size = size,
-	  -- 	 stencil = m.ymin
-	  -- }
-	  
-	  local in_rate = change_rate(input, { par, 1 })
+      -- assert(false, '@todo: implement the columnLinebuffer thing')
+      -- local m = R.modules.columnLinebuffer{
+      --     type = m.inputType.over,
+      --     V = par,
+      --     size = size,
+      --     stencil = m.ymin
+      -- }
 
-	  local inter = R.connect{
-		 input = in_rate,
-		 toModule = R.HS(m)
-	  }
+      local in_rate = change_rate(input, { par, 1 })
 
-	  return change_rate(inter, size)
+      local inter = R.connect{
+         input = in_rate,
+         toModule = R.HS(m)
+      }
+
+      return change_rate(inter, size)
    else
-	  local m = R.modules.linebuffer{
-		 type = m.inputType.over,
-		 V = par,
-		 size = size,
-		 stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
-	  }
+      local m = R.modules.linebuffer{
+         type = m.inputType.over,
+         V = par,
+         size = size,
+         stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
+      }
 
-	  local in_rate = change_rate(input, { par, 1 })
+      local in_rate = change_rate(input, { par, 1 })
 
-	  local inter = R.connect{
-		 input = in_rate,
-		 toModule = R.HS(m)
-	  }
+      local inter = R.connect{
+         input = in_rate,
+         toModule = R.HS(m)
+      }
 
-	  return change_rate(inter, size)
+      return change_rate(inter, size)
    end
 end
 
@@ -573,12 +573,12 @@ function reduce_rate.packTuple(m, util)
 
    local hack = {}
    for i,t in ipairs(m.inputType.list) do
-	  hack[i] = t.params.A
+      hack[i] = t.params.A
    end
 
    return R.connect{
-	  input = input,
-	  toModule = RM.packTuple(hack)
+      input = input,
+      toModule = RM.packTuple(hack)
    }
 end
 
@@ -590,13 +590,13 @@ function reduce_rate.lambda(m, util)
    local input = R.input(m.inputType)
 
    local output = R.connect{
-	  input = input,
-	  toModule = m
+      input = input,
+      toModule = m
    }
 
    return R.defineModule{
-	  input = input,
-	  output = output
+      input = input,
+      output = output
    }
 end
 
@@ -611,30 +611,30 @@ local function transform(m, util)
    local m = to_handshake(m)
    local output
    if m.kind == 'lambda' then
-	  output = m.output
+      output = m.output
    else
-	  output = m
+      output = m
    end
 
    -- run rate optimization
    output = reduce_rate(output, util)
 
    if m.kind == 'lambda' then
-	  return R.defineModule{
-		 input = get_input(output),
-		 output = output
-	  }
+      return R.defineModule{
+         input = get_input(output),
+         output = output
+      }
    else
-	  return output
+      return output
    end
 end
 
 if _VERBOSE then
    for k,v in pairs(reduce_rate) do
-	  reduce_rate[k] = function(m, util)
-		 print('reduce_rate.' .. k)
-		 return v(m, util)
-	  end
+      reduce_rate[k] = function(m, util)
+         print('reduce_rate.' .. k)
+         return v(m, util)
+      end
    end
 end
 

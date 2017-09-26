@@ -44,7 +44,7 @@ for _,example in ipairs(examples) do
       { 1,  2 },
       { 1,  1 },
       { 2,  1 },
-      { 4,  1 },
+      -- { 4,  1 },
       -- { 8,  1 },
    }
 

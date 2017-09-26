@@ -17,7 +17,7 @@ local mod = L.lambda(m, I)
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
-local elem_size = { 1, 1 }
+local elem_size = { 1, 2 }
 local util = P.reduction_factor(mod, elem_size)
 
 local gv = require 'graphview'

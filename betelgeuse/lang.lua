@@ -29,6 +29,7 @@ Module = add(boolean expanding)
        | div(boolean expanding)
        | shift(number n, boolean expanding)
        | trunc(number i, number f)
+       | to_signed()
        | map(Module m)
        | reduce(Module m)
        | zip
@@ -325,6 +326,20 @@ function L.trunc(i, f)
    return L_wrap(T.trunc(i, f, type_func))
 end
 
+--- Converts a module to signed fixed point
+function L.to_signed()
+   local function type_func(t)
+      assert(is_primitive_type(t), 'truncate requires primitive input type')
+      if not t.s then
+         return L.fixed(true, t.i+1, t.f)
+      else
+         return t
+      end
+   end
+
+   return L_wrap(T.to_signed(type_func))
+end
+
 --- Returns a module that is a map given a module to apply.
 function L.map(m)
    local m = L_unwrap(m)
@@ -420,6 +435,10 @@ function L.tuple(...)
 end
 
 function L.fixed(s, i, f)
+   if s == false then
+      print('WARNING: unsigned fixed point is deprecated!')
+   end
+
    return T.fixed(s, i, f)
 end
 

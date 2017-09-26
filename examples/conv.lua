@@ -30,7 +30,6 @@ local mod = L.lambda(m, I)
 
 local gv = require 'graphview'
 gv(mod)
-os.execute('dot -Tpng dbg/graph.dot -o dbg/graph.png' and 'feh dbg/graph.png')
 -- assert(false)
 
 -- @todo: replace consts with
@@ -43,11 +42,11 @@ local rates = {
    -- { 1, 32 },
    -- { 1, 16 },
    -- { 1,  8 },
-   { 1,  4 },
+   -- { 1,  4 },
    -- { 1,  2 },
    -- { 1,  1 },
    -- { 2,  1 },
-   -- { 4,  1 },
+   { 4,  1 },
    -- { 8,  1 },
 }
 
@@ -65,13 +64,13 @@ gv(res[1])
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
--- local R = require 'rigelSimple'
--- R.harness{
---    fn = res[1],
---    inFile = "1080p.raw", inSize = in_size,
---    outFile = "conv", outSize = out_size,
---    earlyOverride = 48000,
--- }
+local R = require 'rigelSimple'
+R.harness{
+   fn = res[1],
+   inFile = "1080p.raw", inSize = in_size,
+   outFile = "conv", outSize = out_size,
+   earlyOverride = 48000,
+}
 
 -- @todo: new harness
 -- R.harness{
