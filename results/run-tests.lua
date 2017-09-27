@@ -17,12 +17,12 @@ local examples = {
    'box_filter', -- like a convolution but no weights
    'conv',       -- convolution
    --NYI 'strided',    -- strided convolution
-   'twopass',    -- separable convolution
-   'unsharp',    -- unsharp mask
-   'harris',     -- harris corner detection
+   -- 'twopass',    -- separable convolution
+   -- 'unsharp',    -- unsharp mask
+   -- 'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
-   'flow',       -- lucas-kanade optical flow
+   -- 'flow',       -- lucas-kanade optical flow
    --NYI 'sift',       -- SIFT
    --NYI 'dnn',        -- single convlayer or mini-DNN (MNIST/CIFAR)
 }
@@ -57,6 +57,7 @@ for _,example in ipairs(examples) do
       res = P.transform(res, util)
       res = P.streamify(res, rate)
       res = P.peephole(res)
+      res = P.make_mem_happy(res)
 
       local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
       local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }

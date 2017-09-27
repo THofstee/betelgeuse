@@ -27,7 +27,9 @@ end
 translate.array2d = memoize(translate.array2d)
 
 function translate.fixed(t)
-   return rtypes.int(t.i + t.f)
+   local n = t.i + t.f
+   n = math.ceil(n/8)*8
+   return rtypes.int(n)
 end
 translate.fixed = memoize(translate.fixed)
 
@@ -106,9 +108,11 @@ function translate.add(m)
    local int_bits = math.max(m.in_type.ts[1].i, m.in_type.ts[2].i)
    local frac_bits = math.max(m.in_type.ts[1].f, m.in_type.ts[2].f)
    local in_width = int_bits + frac_bits
+   local in_type = L.fixed(int_bits, frac_bits)
 
    -- figure out the output width
    local out_width = m.out_type.i + m.out_type.f
+   local out_type = m.out_type
 
    -- we need to do a bit of processing on the input
    local input = R.input(translate(m.in_type))
@@ -129,7 +133,7 @@ function translate.add(m)
       input = in1,
       toModule = R.modules.shiftAndCast{
          inType = in1.type,
-         outType = rtypes.int(in_width),
+         outType = translate(in_type),
          shift = -(frac_bits - m.in_type.ts[1].f)
       }
    }
@@ -138,7 +142,7 @@ function translate.add(m)
       input = in2,
       toModule = R.modules.shiftAndCast{
          inType = in2.type,
-         outType = rtypes.int(in_width),
+         outType = translate(in_type),
          shift = -(frac_bits - m.in_type.ts[2].f)
       }
    }
@@ -150,8 +154,8 @@ function translate.add(m)
    local output = R.connect{
       input = concat,
       toModule = R.modules.sum{
-         inType = rtypes.int(in_width),
-         outType = rtypes.int(out_width)
+         inType = translate(in_type),
+         outType = translate(out_type)
       }
    }
 
@@ -168,9 +172,11 @@ function translate.sub(m)
    local int_bits = math.max(m.in_type.ts[1].i, m.in_type.ts[2].i)
    local frac_bits = math.max(m.in_type.ts[1].f, m.in_type.ts[2].f)
    local in_width = int_bits + frac_bits
+   local in_type = L.fixed(int_bits, frac_bits)
 
    -- figure out the output width
    local out_width = m.out_type.i + m.out_type.f
+   local out_type = m.out_type
 
    -- we need to do a bit of processing on the input
    local input = R.input(translate(m.in_type))
@@ -191,7 +197,7 @@ function translate.sub(m)
       input = in1,
       toModule = R.modules.shiftAndCast{
          inType = in1.type,
-         outType = rtypes.int(in_width),
+         outType = translate(in_type),
          shift = -(frac_bits - m.in_type.ts[1].f)
       }
    }
@@ -200,7 +206,7 @@ function translate.sub(m)
       input = in2,
       toModule = R.modules.shiftAndCast{
          inType = in2.type,
-         outType = rtypes.int(in_width),
+         outType = translate(in_type),
          shift = -(frac_bits - m.in_type.ts[2].f)
       }
    }
@@ -212,8 +218,8 @@ function translate.sub(m)
    local output = R.connect{
       input = concat,
       toModule = R.modules.sub{
-         inType = rtypes.int(in_width),
-         outType = rtypes.int(out_width)
+         inType = translate(in_type),
+         outType = translate(out_type)
       }
    }
 
@@ -232,13 +238,15 @@ function translate.mul(m)
    local int_bits = math.max(m.in_type.ts[1].i, m.in_type.ts[2].i)
    local frac_bits = math.max(m.in_type.ts[1].f, m.in_type.ts[2].f)
    local in_width = int_bits + frac_bits
+   local in_type = L.fixed(int_bits, frac_bits)
 
    -- figure out the output width
    local out_width = m.out_type.i + m.out_type.f
+   local out_type = m.out_type
 
    return R.modules.mult{
-      inType = rtypes.int(in_width),
-      outType = rtypes.int(out_width)
+      inType = translate(in_type),
+      outType = translate(out_type)
    }
 end
 translate.mul = memoize(translate.mul)
@@ -250,13 +258,15 @@ function translate.div(m)
    local int_bits = math.max(m.in_type.ts[1].i, m.in_type.ts[2].i)
    local frac_bits = math.max(m.in_type.ts[1].f, m.in_type.ts[2].f)
    local in_width = int_bits + frac_bits
+   local in_type = L.fixed(int_bits, frac_bits)
 
    -- figure out the output width
    local out_width = m.out_type.i + m.out_type.f
+   local out_type = m.out_type
 
    return R.modules.div{
-      inType = rtypes.int(in_width),
-      outType = rtypes.int(out_width)
+      inType = translate(in_type),
+      outType = translate(out_type)
    }
 end
 translate.div = memoize(translate.div)

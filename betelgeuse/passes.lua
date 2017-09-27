@@ -412,6 +412,47 @@ local function peephole(m)
 end
 P.peephole = peephole
 
+local function make_mem_happy(m)
+   local input = R.input(R.HS(R.array2d(rtypes.uint(8), m.inputType.params.A.size[1], m.inputType.params.A.size[2])))
+
+   local cast = R.connect{
+      input = input,
+      toModule = R.HS(
+         R.modules.map{
+            fn = C.cast(
+               rtypes.uint(8),
+               m.inputType.params.A.over
+            ),
+            size = m.inputType.params.A.size
+         }
+      )
+   }
+
+   local temp = R.connect{
+      input = cast,
+      toModule = m
+   }
+
+   local output = R.connect{
+      input = temp,
+      toModule = R.HS(
+         R.modules.map{
+            fn = C.cast(
+               m.outputType.params.A.over,
+               rtypes.uint(8)
+            ),
+            size = m.outputType.params.A.size
+         }
+      )
+   }
+
+   return R.defineModule{
+      input = input,
+      output = output
+   }
+end
+P.make_mem_happy = make_mem_happy
+
 local function get_type_signature(cur)
    if cur.kind == 'input' or cur.kind == 'constant' then
       return 'nil' .. ' -> ' .. tostring(cur.type)

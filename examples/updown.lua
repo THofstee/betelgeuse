@@ -28,6 +28,9 @@ res = P.translate(mod)
 res = P.transform(res, util)
 res = P.streamify(res, rate)
 res = P.peephole(res)
+res = P.make_mem_happy(res)
+print(res.inputType)
+print(res.outputType)
 
 R.harness{
    fn = res,
