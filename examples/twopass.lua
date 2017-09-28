@@ -1,6 +1,11 @@
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
+local R = require 'rigelSimple'
 
+-- parse command line args
+local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
+
+-- two pass
 local im_size = { 1920, 1080 }
 
 local blury = L.const(L.array2d(L.fixed(9, 0), 1, 3), {
@@ -33,58 +38,28 @@ local x1 = conv({ -1, 0, 3, 1 }, dx)(I)
 local x2 = conv({ 0, -1, 1, 3 }, blury)(x1)
 local mod = L.lambda(x2, I)
 
-local gv = require 'graphview'
-gv(mod)
--- assert(false)
+-- translate to rigel and optimize
+local res
+local util = P.reduction_factor(mod, rate)
+res = P.translate(mod)
+res = P.transform(res, util)
+res = P.streamify(res, rate)
+res = P.peephole(res)
+res = P.make_mem_happy(res)
 
--- @todo: replace consts with
--- local STTYPE = types.array2d( types.uint(8), ConvWidth, ConvWidth )
--- local ITYPE = types.tuple{STTYPE,STTYPE:makeConst()}
--- inp = R.input( ITYPE )
-
--- utilization
-local rates = {
-   -- { 1, 32 },
-   -- { 1, 16 },
-   -- { 1,  8 },
-   { 1,  4 },
-   -- { 1,  2 },
-   -- { 1,  1 },
-   -- { 2,  1 },
-   -- { 4,  1 },
-   -- { 8,  1 },
-}
-
-local res = {}
-for i,rate in ipairs(rates) do
-   local util = P.reduction_factor(mod, rate)
-   res[i] = P.translate(mod)
-   res[i] = P.transform(res[i], util)
-   res[i] = P.streamify(res[i], rate)
-   res[i] = P.peephole(res[i])
-end
-
-gv(res[1])
-
+-- call harness
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
--- local R = require 'rigelSimple'
--- R.harness{
---    fn = res[1],
---    inFile = "1080p.raw", inSize = in_size,
---    outFile = "conv", outSize = out_size,
---    earlyOverride = 48000,
--- }
+local fname = arg[0]:match("([^/]+).lua")
+arg = {}
 
--- @todo: new harness
--- R.harness{
---    fn = hsfn,
---    outFile = "conv_wide_handshake_taps",
---    inFile="frame_128.raw",
---    tapType=STTYPE:makeConst(), tapValue=tapValue,
---    inSize={inputW,inputH},
---    outSize={inputW,inputH}
--- }
+R.harness{
+   fn = res,
+   inFile = "1080p.raw", inSize = in_size,
+   outFile = fname, outSize = out_size,
+   earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
+}
 
+-- return the pre-translated module
 return mod

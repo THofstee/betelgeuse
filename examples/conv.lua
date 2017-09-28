@@ -1,5 +1,9 @@
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
+local R = require 'rigelSimple'
+
+-- parse command line args
+local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 
 local div256 = function()
    local x = L.input(L.uint(17))
@@ -28,58 +32,29 @@ local m = L.crop(0, 0, 0, 0)(conv(st_wt))
 -- local m = L.crop(8, 8, 2, 1)(conv(st_wt))
 local mod = L.lambda(m, I)
 
-local gv = require 'graphview'
-gv(mod)
--- assert(false)
 
--- @todo: replace consts with
--- local STTYPE = types.array2d( types.uint(8), ConvWidth, ConvWidth )
--- local ITYPE = types.tuple{STTYPE,STTYPE:makeConst()}
--- inp = R.input( ITYPE )
+-- translate to rigel and optimize
+local res
+local util = P.reduction_factor(mod, rate)
+res = P.translate(mod)
+res = P.transform(res, util)
+res = P.streamify(res, rate)
+res = P.peephole(res)
+res = P.make_mem_happy(res)
 
--- utilization
-local rates = {
-   -- { 1, 32 },
-   -- { 1, 16 },
-   -- { 1,  8 },
-   -- { 1,  4 },
-   -- { 1,  2 },
-   -- { 1,  1 },
-   -- { 2,  1 },
-   { 4,  1 },
-   -- { 8,  1 },
-}
-
-local res = {}
-for i,rate in ipairs(rates) do
-   local util = P.reduction_factor(mod, rate)
-   res[i] = P.translate(mod)
-   res[i] = P.transform(res[i], util)
-   res[i] = P.streamify(res[i], rate)
-   res[i] = P.peephole(res[i])
-end
-
-gv(res[1])
-
+-- call harness
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
-local R = require 'rigelSimple'
+local fname = arg[0]:match("([^/]+).lua")
+arg = {}
+
 R.harness{
-   fn = res[1],
-   inFile = "1080p.raw", inSize = in_size,
-   outFile = "conv", outSize = out_size,
-   earlyOverride = 48000,
+   fn = res,
+   inFile = "box_32.raw", inSize = in_size,
+   outFile = fname, outSize = out_size,
+   earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }
 
--- @todo: new harness
--- R.harness{
---    fn = hsfn,
---    outFile = "conv_wide_handshake_taps",
---    inFile="frame_128.raw",
---    tapType=STTYPE:makeConst(), tapValue=tapValue,
---    inSize={inputW,inputH},
---    outSize={inputW,inputH}
--- }
-
+-- return the pre-translated module
 return mod

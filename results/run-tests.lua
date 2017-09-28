@@ -6,6 +6,7 @@ local R = require 'rigelSimple'
 local G = require 'graphview'
 
 local mode = 'verilator'
+local clean_after_test = true
 
 local lfs = require 'lfs'
 lfs.chdir('examples')
@@ -16,7 +17,7 @@ local examples = {
    'updown',     -- upsample -> downsample
    'box_filter', -- like a convolution but no weights
    'conv',       -- convolution
-   --NYI 'strided',    -- strided convolution
+   -- 'strided',    -- strided convolution
    -- 'twopass',    -- separable convolution
    -- 'unsharp',    -- unsharp mask
    -- 'harris',     -- harris corner detection
@@ -50,6 +51,8 @@ for _,example in ipairs(examples) do
 
 
    for i,rate in ipairs(rates) do
+      if clean_after_test then os.execute('make clean') end
+
       print(example, inspect(rate))
 
       local util = P.reduction_factor(mod, rate)
@@ -99,3 +102,5 @@ for _,example in ipairs(examples) do
 end
 
 print(inspect(results))
+
+lfs.chdir('..')
