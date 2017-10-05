@@ -6,7 +6,7 @@ local R = require 'rigelSimple'
 local G = require 'graphview'
 
 local mode = 'verilator'
-local clean_after_test = true
+local clean_after_test = false
 
 local lfs = require 'lfs'
 lfs.chdir('examples')
@@ -38,13 +38,13 @@ for _,example in ipairs(examples) do
 
    -- utilization
    local rates = {
-      { 1, 32 },
-      { 1, 16 },
-      { 1,  8 },
-      { 1,  4 },
-      { 1,  2 },
+      -- { 1, 32 },
+      -- { 1, 16 },
+      -- { 1,  8 },
+      -- { 1,  4 },
+      -- { 1,  2 },
       { 1,  1 },
-      { 2,  1 },
+      -- { 2,  1 },
       -- { 4,  1 },
       -- { 8,  1 },
    }
@@ -77,6 +77,7 @@ for _,example in ipairs(examples) do
       end
 
       R.harness{
+         backend = mode,
          fn = res,
          inFile = in_image, inSize = in_size,
          outFile = filename, outSize = out_size,

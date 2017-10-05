@@ -37,7 +37,11 @@ local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
 local fname = arg[0]:match("([^/]+).lua")
-arg = {}
+local old_arg = arg
+
+-- if type(arg[1]) == 'number' then
+--    arg = {}
+-- end
 
 R.harness{
    fn = res,
@@ -45,6 +49,8 @@ R.harness{
    outFile = fname, outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }
+
+arg = old_arg
 
 -- return the pre-translated module
 return mod
