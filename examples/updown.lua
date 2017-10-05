@@ -1,6 +1,7 @@
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 local R = require 'rigelSimple'
+local G = require 'graphview'
 
 -- parse command line args
 local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
@@ -18,6 +19,8 @@ local x4 = L.downsample(2, 2)(x3)
 local x5 = L.map(add_c)(x4)
 local mod = L.lambda(x5, x0)
 
+G(mod)
+
 -- translate to rigel and optimize
 local res
 local util = P.reduction_factor(mod, rate)
@@ -26,6 +29,8 @@ res = P.transform(res, util)
 res = P.streamify(res, rate)
 res = P.peephole(res)
 res = P.make_mem_happy(res)
+
+G(res)
 
 -- call harness
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }

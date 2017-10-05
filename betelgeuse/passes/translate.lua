@@ -396,10 +396,33 @@ function translate.apply(a)
       }
    end
 
-   return R.connect{
-      input = v,
-      toModule = m
-   }
+   if m.kind == 'lambda' then
+      local function inline(m, input)
+         return m.output:visitEach(function(cur, inputs)
+               if cur.kind == 'input' then
+                  return input
+               elseif cur.kind == 'apply' then
+                  return R.connect{
+                     input = inputs[1],
+                     toModule = cur.fn
+                  }
+               elseif cur.kind == 'concat' then
+                  return R.concat(inputs)
+               elseif cur.kind == 'constant' then
+                  return cur
+               else
+                  assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
+               end
+         end)
+      end
+
+      return inline(m, v)
+   else
+      return R.connect{
+         input = v,
+         toModule = m
+      }
+   end
 end
 translate.apply = memoize(translate.apply)
 

@@ -1,94 +1,73 @@
-local inspect = require 'inspect'
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
---[[
-   tests with rigel
---]]
+local R = require 'rigelSimple'
+local G = require 'graphview'
 
-local im_size = { 640, 480 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
+-- parse command line args
+local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 
-local offsets = {}
-for i = 1,im_size[1] do
-   offsets[i] = {}
-   for j = 1,im_size[2] do
-      offsets[i][j] = { -1, -1 }
-   end
+-- harris corner
+local im_size = { 32, 32 }
+
+local dx = L.const(L.array2d(L.fixed(9, 0), 3, 3), {
+                      { 1, 0, -1 },
+                      { 2, 0, -2 },
+                      { 1, 0, -1 }})
+
+local dy = L.const(L.array2d(L.fixed(9, 0), 3, 3), {
+                      {  1,  2,  1 },
+                      {  0,  0,  0 },
+                      { -1, -2, -1 }})
+
+local gaussian = L.const(L.array2d(L.fixed(9, 0), 3, 3), {
+                      { 20, 32, 20 },
+                      { 32, 48, 32 },
+                      { 20, 32, 20 }})
+
+-- local gaussian = L.const(L.array2d(L.fixed(9, 0), 5, 5), {
+--                       { 1,  4,  6,  4, 1 },
+--                       { 4, 15, 24, 15, 4 },
+--                       { 6, 24, 40, 24, 6 },
+--                       { 4, 15, 24, 15, 4 },
+--                       { 1,  4,  6,  4, 1 }})
+
+local function conv(taps)
+   local pad_size = im_size
+   -- local pad_size = { im_size[1]+16, im_size[2]+3 }
+   local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
+   local pad = L.pad(0, 0, 0, 0)(I)
+   -- local pad = L.pad(8, 8, 2, 1)(I)
+   local st = L.stencil(-1, -1, 3, 3)(pad)
+   local wt = L.broadcast(pad_size[1], pad_size[2])(taps)
+   local st_wt = L.zip_rec()(L.concat(st, wt))
+   local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
+   -- local conv = L.chain(conv, L.map(div256()), L.map(L.trunc(8)))
+   local m = L.crop(0, 0, 0, 0)(conv(st_wt))
+   -- local m = L.crop(8, 8, 2, 1)(conv(st_wt))
+   local mod = L.lambda(m, I)
+   return mod
 end
 
-local off = L.const(L.array2d(L.tuple(L.int8(), L.int8()), im_size[1], im_size[2]), offsets)
-local I2 = L.gather_stencil(1, 1)(L.concat(I, off))
-local m = L.map(L.reduce(L.add()))(I2)
--- P.translate(m)
+local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 
-print(L.map(L.reduce(L.add())).internal)
-assert(false)
+-- compute image gradients
+local Ix = conv(dx)(I)
 
--- add constant to image (broadcast)
-local im_size = { 1920, 1080 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local c = L.const(L.uint8(), 1)
-local bc = L.broadcast(im_size[1], im_size[2])(c)
-local m = L.map(L.add())(L.zip_rec()(L.concat(I, bc)))
+local mod = L.lambda(Ix, I)
 
--- @todo: add something like betel(function(I) map(f)(I) end) that will let you declare lambdas more easily
--- @todo: add something like an extra class that when called will lower the module into rigel and give you back something
--- @todo: remove the rigel harness calls, or make a nicer way to do that
--- @todo: add some sort of support for cross-module optimizations
+G(mod)
 
--- add two image streams
-local im_size = { 1920, 1080 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local J = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local ij = L.zip_rec()(L.concat(I, J))
-local m = L.map(L.add())(ij)
-
--- @todo: check map of zip_rec
--- @todo: this should probably return a lambda so i can use it in a map?
--- @todo: should split up generators/macros? L_wrap_macro, L_wrap_gen
--- function make_lambda(f)
---    return function(v)
---    local input = L.input(v.type)
---    return L.lambda(f(input), input)
-
---    end
--- end
-
--- L.apply(make_lambda(function(x) return L.concat(x, L.const(L.uint8(), 30)) end), L.input(L.uint8()))
-
--- box filter conv (fork)
-local im_size = { 16, 32 }
-local pad_size = { im_size[1]+16, im_size[2]+3 }
-local I = L.input(L.array2d(L.uint8(), im_size[1], im_size[2]))
-local pad = L.pad(8, 8, 2, 1)(I)
-local st = L.stencil(-1, -1, 4, 4)(pad)
-local st_wt = L.zip_rec()(L.concat(st, st))
-local conv = L.chain(L.map(L.map(L.add())), L.map(L.reduce(L.add())))
-local m = L.crop(8, 8, 2, 1)(conv(st_wt))
-local mod = L.lambda(m, I)
-
--- -- Two inputs, one multi rate
--- local I = L.input(L.array2d(L.uint8(), 10, 10))
--- local J = L.input(L.array2d(L.uint8(), 12, 12))
--- local I2 = L.pad(1, 1, 1, 1)(I)
--- local m = L.map(L.add())(L.concat(I2, J))
-
--- -- One interleaved input, fork into multi-rate for one branch, then join
--- local I = L.input(L.array2d(L.array(L.uint8(), 2), 16, 16))
-
-local elem_size = { 1, 1 }
-local util = P.reduction_factor(mod, elem_size)
-
+-- translate to rigel and optimize
 local res
+local util = P.reduction_factor(mod, rate)
 res = P.translate(mod)
+G(res)
 res = P.transform(res, util)
-res = P.streamify(res, elem_size)
+res = P.streamify(res, rate)
 res = P.peephole(res)
-print('--- Peephole ---')
-P.rates(res)
--- res = P.handshakes(res)
--- print('--- Handshake ---')
--- P.rates(res)
+res = P.make_mem_happy(res)
 
--- @todo: lucas-kanade
--- @todo: histogram
+G(res)
+
+-- return the pre-translated module
+return mod

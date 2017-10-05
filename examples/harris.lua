@@ -1,12 +1,13 @@
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 local R = require 'rigelSimple'
+local G = require 'graphview'
 
 -- parse command line args
 local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 
 -- harris corner
-local im_size = { 1920, 1080 }
+local im_size = { 32, 32 }
 
 local dx = L.const(L.array2d(L.fixed(9, 0), 3, 3), {
                       { 1, 0, -1 },
@@ -78,21 +79,28 @@ local det = L.map(L.sub())(L.zip()(L.concat(d1, d2)))
 -- calculate k*tr(A)^2
 local tr = L.map(L.add())(diag)
 local tr2 = L.map(L.mul())(L.zip()(L.concat(tr, tr)))
-local ktr2 = L.map(L.div())(L.zip()(L.concat(tr2, L.broadcast(im_size[1], im_size[2])(L.const(L.fixed(9, 0), 20)))))
+-- local ktr2 = L.map(L.div())(L.zip()(L.concat(tr2, L.broadcast(im_size[1], im_size[2])(L.const(L.fixed(9, 0), 20)))))
+-- local ktr2 = L.map(L.mul())(L.zip()(L.concat(tr2, L.broadcast(im_size[1], im_size[2])(L.const(L.fixed(0, 6), 3))))) -- hack, 1/20 is .000011... so we say 3 with 6 fixed point bits since i cant declare fixed point consts yet
+local ktr2 = tr2 -- hack, just ignore the division.
 
 -- corner response = det(A)-k*tr(A)^2
 local Mc = L.map(L.sub())(L.zip()(L.concat(det, ktr2)))
 
 local mod = L.lambda(Mc, I)
 
+G(mod)
+
 -- translate to rigel and optimize
 local res
 local util = P.reduction_factor(mod, rate)
 res = P.translate(mod)
+G(res)
 res = P.transform(res, util)
 res = P.streamify(res, rate)
 res = P.peephole(res)
 res = P.make_mem_happy(res)
+
+G(res)
 
 -- call harness
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
@@ -103,7 +111,7 @@ arg = {}
 
 R.harness{
    fn = res,
-   inFile = "1080p.raw", inSize = in_size,
+   inFile = "box_32.raw", inSize = in_size,
    outFile = fname, outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }

@@ -582,22 +582,86 @@ function reduce_rate.packTuple(m, util)
    }
 end
 
+-- @todo: split body in to inline_cur and then use inline_cur in other places?
+local function inline(m, input)
+   return m.output:visitEach(function(cur, inputs)
+         if cur.kind == 'input' then
+            return input
+         elseif cur.kind == 'apply' then
+            return R.connect{
+               input = inputs[1],
+               toModule = cur.fn
+            }
+         elseif cur.kind == 'concat' then
+            return R.concat(inputs)
+         elseif cur.kind == 'constant' then
+            return cur
+         else
+            assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
+         end
+   end)
+end
+
+local function inline_hs(m, input)
+   return m.output:visitEach(function(cur, inputs)
+         if cur.kind == 'input' then
+            return input
+         elseif cur.kind == 'apply' then
+            return R.connect{
+               input = inputs[1],
+               toModule = R.HS(cur.fn)
+            }
+         elseif cur.kind == 'concat' then
+            return R.concat(inputs)
+         elseif cur.kind == 'constant' then
+            return cur
+         else
+            assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
+         end
+   end)
+end
+
+function reduce_rate.constant(m, util)
+   return R.HS(
+      R.modules.constSeq{
+         type = R.array2d(m.type, 1, 1),
+         P = 1,
+         value = { m.value }
+      }
+   )
+end
+
 function reduce_rate.lambda(m, util)
-   assert(false, "Not yet implemented")
-   -- @todo: recurse optimization calls here?
-   local m = R.HS(m)
+   local input = reduce_rate(m.inputs[1], util)
+   local output = reduce_rate(base(m).output, util)
 
-   local input = R.input(m.inputType)
+   print(inspect(base(m), {depth = 2}))
 
-   local output = R.connect{
-      input = input,
-      toModule = m
-   }
+   return inline(base(m), input)
 
-   return R.defineModule{
-      input = input,
-      output = output
-   }
+   -- -- assert(false, "Not yet implemented")
+   -- -- @todo: recurse optimization calls here?
+   -- -- @todo: can i just inline the lambda?
+   -- -- print(inspect(m, {depth = 2}))
+
+   -- local m = base(m)
+
+   -- local i = get_input(m.output)
+   -- print(m.kind)
+   -- print(inspect(i, {depth = 2}))
+
+   -- local input = R.input(m.inputType)
+
+   -- local output = inline(m, input)
+
+   -- local res = R.defineModule{
+   --    input = input,
+   --    output = output
+   -- }
+
+   -- print(inspect(res, {depth = 2}))
+
+   -- return res
 end
 
 function reduce_rate.constSeq(m, util)
