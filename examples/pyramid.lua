@@ -1,32 +1,36 @@
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 local R = require 'rigelSimple'
+local G = require 'graphview'
 
 -- parse command line args
 local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 
--- add const
-local x = L.input(L.fixed(9, 0))
-local add_c = L.lambda(L.add()(L.concat(x, L.const(L.fixed(9, 0), 30))), x)
-
--- map -> pad -> map -> crop -> map
+-- image mip pyramid
 local im_size = { 32, 32 }
-local x0 = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
-local x1 = L.map(add_c)(x0)
-local x2 = L.pad(8, 8, 2, 1)(x1)
-local x3 = L.map(add_c)(x2)
-local x4 = L.crop(8, 8, 2, 1)(x3)
-local x5 = L.map(add_c)(x4)
-local mod = L.lambda(x5, x0)
+local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
+local x0 = I
+local x1 = L.downsample(2, 2)(x0)
+local x2 = L.downsample(2, 2)(x1)
+local x3 = L.downsample(2, 2)(x2)
+local x4 = L.downsample(2, 2)(x3)
+local y = L.concat(x0, x1, x2, x3, x4)
+
+print(y.type)
+
+local mod = L.lambda(y, I)
+G(mod)
 
 -- translate to rigel and optimize
 local res
 local util = P.reduction_factor(mod, rate)
 res = P.translate(mod)
+G(res)
 res = P.transform(res, util)
 res = P.streamify(res, rate)
 res = P.peephole(res)
 res = P.make_mem_happy(res)
+G(res)
 
 -- call harness
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }

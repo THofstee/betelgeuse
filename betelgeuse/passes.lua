@@ -187,6 +187,32 @@ local function inline(m, input)
    end)
 end
 
+local function inline_hs(m, input)
+   return m.output:visitEach(function(cur, inputs)
+         if cur.kind == 'input' then
+            return input
+         elseif cur.kind == 'apply' then
+            print(inspect(cur.fn, {depth = 2}))
+            return R.connect{
+               input = inputs[1],
+               toModule = R.HS(cur.fn)
+            }
+         elseif cur.kind == 'concat' then
+            local hack = {}
+            for i,inpt in ipairs(inputs) do
+               hack[i] = inpt.type.params.A
+            end
+
+            return R.connect{
+               input = R.concat(inputs),
+               toModule = RM.packTuple(hack)
+            }
+         else
+            assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
+         end
+   end)
+end
+
 -- @todo: maybe this should operate the same way as transform and peephole and case on whether or not the input is a lambda? in any case i think all 3 should be consistent.
 -- @todo: do i want to represent this in my higher level language instead as an internal feature (possibly useful too for users) and then translate to rigel instead?
 -- converts a module to operate on streams instead of full images
@@ -272,7 +298,13 @@ local function peephole(m)
                else
                   -- fuse casts
                   -- @todo: this is somewhat broken in rigel.
-                  local can_cast, _ = pcall(function() return rtypes.checkExplicitCast(temp_input.inputType, temp_cur.outputType) end)
+                  local can_cast, _ = pcall(function()
+                        return rtypes.checkExplicitCast(
+                           temp_input.inputType,
+                           temp_cur.outputType
+                        )
+                  end)
+
                   if false then
                      return R.connect{
                         input = inputs[1].inputs[1],
@@ -355,7 +387,27 @@ local function peephole(m)
    local function removal(cur, inputs)
       if cur.kind == 'apply' then
          local temp_cur = base(cur)
-         if temp_cur.kind == 'changeRate' then
+         if temp_cur.kind == 'lambda' then
+            -- inline lambdas
+            return inline_hs(temp_cur, inputs[1])
+         elseif temp_cur.generator == 'broadcastWide' then
+            -- constants into broadcasts can be eliminated
+            if base(inputs[1]).generator == 'C.broadcast' then
+               local in_size = temp_cur.inputType.size
+               local out_size = temp_cur.outputType.size
+               return R.connect{
+                  input = inputs[1],
+                  toModule = R.HS(
+                     R.modules.changeRate{
+                        type = temp_cur.inputType.over,
+                        H = 1,
+                        inW = in_size[1]*in_size[2],
+                        outW = out_size[1]*out_size[2]
+                     }
+                  )
+               }
+            end
+         elseif temp_cur.kind == 'changeRate' then
             if temp_cur.inputRate == temp_cur.outputRate then
                -- remove redundant changeRates
                return inputs[1]

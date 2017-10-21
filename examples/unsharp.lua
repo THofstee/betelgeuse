@@ -1,12 +1,13 @@
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 local R = require 'rigelSimple'
+local G = require 'graphview'
 
 -- parse command line args
 local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 
 -- unsharp mask
-local im_size = { 1920, 1080 }
+local im_size = { 32, 32 }
 
 local function conv()
    local pad_size = im_size
@@ -63,6 +64,8 @@ local scaled = scale()(blurred)
 local sharp = diff(I, scaled)
 local mod = L.lambda(sharp, I)
 
+G(mod)
+
 -- translate to rigel and optimize
 local res
 local util = P.reduction_factor(mod, rate)
@@ -72,18 +75,20 @@ res = P.streamify(res, rate)
 res = P.peephole(res)
 res = P.make_mem_happy(res)
 
+G(res)
+
 -- call harness
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
 local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 
 local fname = arg[0]:match("([^/]+).lua")
-arg = {}
 
 R.harness{
+   backend = 'verilog',
    fn = res,
-   inFile = "1080p.raw", inSize = in_size,
+   inFile = "box_32.raw", inSize = in_size,
    outFile = fname, outSize = out_size,
-   earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
+   earlyOverride = 300000, -- downsample is variable latency, overestimate cycles
 }
 
 -- return the pre-translated module

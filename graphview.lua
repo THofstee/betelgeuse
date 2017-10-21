@@ -1,6 +1,9 @@
 local Graphviz = require 'graphviz'
 local memoize = require 'memoize'
 
+local G = {}
+G.render = true
+
 local function str(s)
    return "\"" .. tostring(s) .. "\""
 end
@@ -14,11 +17,7 @@ local function b_graph_view(l)
       if t.kind == 'array2d' then
          return typestr(t.t) .. '[' .. t.w .. ',' .. t.h .. ']'
       elseif t.kind == 'fixed' then
-         if t.s then
-            return 'sfixed' .. t.i .. '.' .. t.f
-         else
-            return 'ufixed' .. t.i .. '.' .. t.f
-         end
+         return 'fixed' .. t.i .. '.' .. t.f
       elseif t.kind == 'tuple' then
          local res = '{'
          for i,v in ipairs(t.ts) do
@@ -178,7 +177,9 @@ local function b_graph_view(l)
    a(l)
 
    dot:write('dbg/graph.dot')
-   dot:render('dbg/graph.dot')
+   if G.render then
+      dot:render('dbg/graph.dot')
+   end
 end
 
 local function r_graph_view(l)
@@ -484,7 +485,9 @@ local function r_graph_view(l)
    a(l)
 
    dot:write('dbg/graph.dot')
-   dot:render('dbg/graph.dot')
+   if G.render then
+      dot:render('dbg/graph.dot')
+   end
 end
 
 local function graph_view(g)
@@ -495,4 +498,11 @@ local function graph_view(g)
    end
 end
 
-return graph_view
+local G_mt = {
+   __call = function(t, g)
+      graph_view(g)
+   end
+}
+
+setmetatable(G, G_mt)
+return G

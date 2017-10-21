@@ -2,7 +2,9 @@ local R = require 'rigelSimple'
 local RM = require 'modules'
 local C = require 'examplescommon'
 
+local memoize = require 'memoize'
 local inspect = require 'inspect'
+local log = require 'log'
 
 local to_handshake = require 'betelgeuse.passes.to_handshake'
 
@@ -124,7 +126,7 @@ end
 -- @todo: replace reduce_rate on modules to be reduce_rates on apply
 local reduce_rate = {}
 local reduce_rate_mt = {
-   __call = function(reduce_rate, m, util)
+   __call = memoize(function(reduce_rate, m, util)
       -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
       if util[2] <= util[1] then return m end
 
@@ -132,7 +134,7 @@ local reduce_rate_mt = {
       if string.find(dispatch, 'lift') then return reduce_rate.lift(m, util) end
       assert(reduce_rate[dispatch], "dispatch function " .. dispatch .. " is nil")
       return reduce_rate[dispatch](m, util)
-   end
+   end)
 }
 setmetatable(reduce_rate, reduce_rate_mt)
 
@@ -165,7 +167,7 @@ end
 function reduce_rate.concat(m, util)
    for i,input in ipairs(m.inputs) do
       local in_type = base(input).outputType
-      -- print(inspect(in_type, {depth = 2}))
+      -- log.trace(inspect(in_type, {depth = 2}))
    end
 
    local inputs = {}
@@ -196,7 +198,7 @@ function reduce_rate.map(m, util)
 
    local in_rate = change_rate(input, { par, 1 })
 
-   if util[1]*(max_reduce/par)/util[2] < 1 and par ~= 1 then print('case of par>1 not yet implemented') end
+   if util[1]*(max_reduce/par)/util[2] < 1 and par ~= 1 then log.warn('case of par>1 not yet implemented') end
    if util[1]*(max_reduce/par)/util[2] < 1 and par == 1 then
       -- we would still like to further reduce parallelism, reduce inner module
       local in_cast = R.connect{
@@ -277,7 +279,7 @@ function reduce_rate.map(m, util)
 end
 
 function reduce_rate.SoAtoAoS(m, util)
-   print('@todo: implement', m.kind, linenum())
+   log.warn('@todo: implement')
    local input = reduce_rate(m.inputs[1], util)
 
    local m = m.fn
@@ -506,7 +508,7 @@ function reduce_rate.downsample(m, util)
 end
 
 function reduce_rate.stencil(m, util)
-   print('@todo: fixme', m.kind, linenum())
+   log.warn('@todo: fixme')
    local input = reduce_rate(m.inputs[1], util)
 
    local m = base(m.fn)
@@ -602,25 +604,6 @@ local function inline(m, input)
    end)
 end
 
-local function inline_hs(m, input)
-   return m.output:visitEach(function(cur, inputs)
-         if cur.kind == 'input' then
-            return input
-         elseif cur.kind == 'apply' then
-            return R.connect{
-               input = inputs[1],
-               toModule = R.HS(cur.fn)
-            }
-         elseif cur.kind == 'concat' then
-            return R.concat(inputs)
-         elseif cur.kind == 'constant' then
-            return cur
-         else
-            assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
-         end
-   end)
-end
-
 function reduce_rate.constant(m, util)
    return R.HS(
       R.modules.constSeq{
@@ -632,23 +615,24 @@ function reduce_rate.constant(m, util)
 end
 
 function reduce_rate.lambda(m, util)
+   log.error('this should not have been called')
    local input = reduce_rate(m.inputs[1], util)
    local output = reduce_rate(base(m).output, util)
 
-   print(inspect(base(m), {depth = 2}))
+   log.trace(inspect(base(m), {depth = 2}))
 
    return inline(base(m), input)
 
    -- -- assert(false, "Not yet implemented")
    -- -- @todo: recurse optimization calls here?
    -- -- @todo: can i just inline the lambda?
-   -- -- print(inspect(m, {depth = 2}))
+   -- -- log.trace(inspect(m, {depth = 2}))
 
    -- local m = base(m)
 
    -- local i = get_input(m.output)
-   -- print(m.kind)
-   -- print(inspect(i, {depth = 2}))
+   -- log.trace(m.kind)
+   -- log.trace(inspect(i, {depth = 2}))
 
    -- local input = R.input(m.inputType)
 
@@ -659,13 +643,13 @@ function reduce_rate.lambda(m, util)
    --    output = output
    -- }
 
-   -- print(inspect(res, {depth = 2}))
+   -- log.trace(inspect(res, {depth = 2}))
 
    -- return res
 end
 
 function reduce_rate.constSeq(m, util)
-   print('@todo: implement', m.kind, linenum())
+   log.warn('@todo: implement')
 
    return m
 end
@@ -696,7 +680,7 @@ end
 if _VERBOSE then
    for k,v in pairs(reduce_rate) do
       reduce_rate[k] = function(m, util)
-         print('reduce_rate.' .. k)
+         log.trace('reduce_rate.' .. k)
          return v(m, util)
       end
    end

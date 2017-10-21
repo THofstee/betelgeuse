@@ -4,6 +4,7 @@ local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 local R = require 'rigelSimple'
 local G = require 'graphview'
+G.render = false
 
 local mode = 'verilator'
 local clean_after_test = false
@@ -17,10 +18,10 @@ local examples = {
    'updown',     -- upsample -> downsample
    'box_filter', -- like a convolution but no weights
    'conv',       -- convolution
-   -- 'strided',    -- strided convolution
-   -- 'twopass',    -- separable convolution
+   'strided',    -- strided convolution
+   'twopass',    -- separable convolution
    -- 'unsharp',    -- unsharp mask
-   -- 'harris',     -- harris corner detection
+   'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
    -- 'flow',       -- lucas-kanade optical flow
@@ -38,11 +39,11 @@ for _,example in ipairs(examples) do
 
    -- utilization
    local rates = {
-      -- { 1, 32 },
-      -- { 1, 16 },
-      -- { 1,  8 },
-      -- { 1,  4 },
-      -- { 1,  2 },
+      { 1, 32 },
+      { 1, 16 },
+      { 1,  8 },
+      { 1,  4 },
+      { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },

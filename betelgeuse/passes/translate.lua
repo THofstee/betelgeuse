@@ -4,12 +4,15 @@ local rtypes = require 'types'
 local memoize = require 'memoize'
 local L = require 'betelgeuse.lang'
 
+local log = require 'log'
+local inspect = require 'inspect'
+
 local _VERBOSE = false
 
 local translate = {}
 local translate_mt = {
    __call = function(t, m)
-      if _VERBOSE then print("translate." .. m.kind) end
+      if _VERBOSE then log.trace("translate." .. m.kind) end
       assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
       return t[m.kind](m)
    end
@@ -281,7 +284,7 @@ end
 translate.shift = memoize(translate.shift)
 
 function translate.trunc(m)
-   print(translate(m.in_type), translate(m.out_type))
+   log.trace(translate(m.in_type), translate(m.out_type))
    return C.cast(
       translate(m.in_type),
       translate(m.out_type)
@@ -375,7 +378,7 @@ function translate.apply(a)
    local v = translate(a.v)
 
    local function cast(src, dst)
-      -- print(a.m.in_type, a.v.type)
+      -- log.trace(a.m.in_type, a.v.type)
       if src.kind ~= 'array' then
          return C.cast(
                src,
