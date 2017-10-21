@@ -8,7 +8,7 @@ local log = require 'log'
 
 local to_handshake = require 'betelgeuse.passes.to_handshake'
 
-local _VERBOSE = false
+local _VERBOSE = true
 
 local function linenum(level)
    return debug.getinfo(level or 2, 'l').currentline
@@ -350,7 +350,7 @@ function reduce_rate.broadcast(m, util)
          R.modules.upsampleSeq{
             type = m.inputType,
             V = par,
-            size = { m.inputType.width, m.inputType.height },
+            size = { m.inputType.size[1], m.inputType.size[2] },
             scale = { out_size[1]*out_size[2], 1 }
          }
       )
