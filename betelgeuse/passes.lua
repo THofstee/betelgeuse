@@ -387,10 +387,11 @@ local function peephole(m)
    local function removal(cur, inputs)
       if cur.kind == 'apply' then
          local temp_cur = base(cur)
-         if temp_cur.kind == 'lambda' then
-            -- inline lambdas
-            return inline_hs(temp_cur, inputs[1])
-         elseif temp_cur.generator == 'broadcastWide' then
+         -- if temp_cur.kind == 'lambda' then
+         --    -- inline lambdas
+         --    return inline_hs(temp_cur, inputs[1])
+         -- elseif temp_cur.generator == 'broadcastWide' then
+         if temp_cur.generator == 'broadcastWide' then
             -- constants into broadcasts can be eliminated
             if base(inputs[1]).generator == 'C.broadcast' then
                local in_size = temp_cur.inputType.size

@@ -32,17 +32,19 @@ local gaussian = L.const(L.array2d(L.fixed(9, 0), 3, 3), {
 --                       { 1,  4,  6,  4, 1 }})
 
 local function conv(taps)
+   local function conv2()
+      local I = L.input(L.array2d(L.fixed(9, 0), 3, 3))
+      local c = L.chain(L.map(L.mul()), L.reduce(L.add()))
+      return L.lambda(c(L.zip()(L.concat(I, taps))), I)
+   end
+
    local pad_size = im_size
    -- local pad_size = { im_size[1]+16, im_size[2]+3 }
    local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
    local pad = L.pad(0, 0, 0, 0)(I)
    -- local pad = L.pad(8, 8, 2, 1)(I)
    local st = L.stencil(-1, -1, 3, 3)(pad)
-   local wt = L.broadcast(pad_size[1], pad_size[2])(taps)
-   local st_wt = L.zip_rec()(L.concat(st, wt))
-   local conv = L.chain(L.map(L.map(L.mul())), L.map(L.reduce(L.add())))
-   -- local conv = L.chain(conv, L.map(div256()), L.map(L.trunc(8)))
-   local m = L.crop(0, 0, 0, 0)(conv(st_wt))
+   local m = L.crop(0, 0, 0, 0)(L.map(conv2())(st))
    -- local m = L.crop(8, 8, 2, 1)(conv(st_wt))
    local mod = L.lambda(m, I)
    return mod
