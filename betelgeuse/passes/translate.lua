@@ -158,7 +158,8 @@ function translate.add(m)
       input = concat,
       toModule = R.modules.sum{
          inType = translate(in_type),
-         outType = translate(out_type)
+         outType = translate(out_type),
+         async = true
       }
    }
 
@@ -222,7 +223,8 @@ function translate.sub(m)
       input = concat,
       toModule = R.modules.sub{
          inType = translate(in_type),
-         outType = translate(out_type)
+         outType = translate(out_type),
+         async = true
       }
    }
 

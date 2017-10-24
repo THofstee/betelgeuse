@@ -140,6 +140,9 @@ setmetatable(reduce_rate, reduce_rate_mt)
 
 function reduce_rate.makeHandshake(m, util)
    if string.find(m.fn.fn.kind, 'lift') then return reduce_rate.lift(m, util) end
+   if reduce_rate[m.fn.fn.kind] == nil then
+      log.fatal('reduce_rate.' .. m.fn.fn.kind .. ' not defined.')
+   end
    return reduce_rate[m.fn.fn.kind](m, util)
 end
 
@@ -173,12 +176,80 @@ function reduce_rate.concat(m, util)
    local inputs = {}
    for i,input in ipairs(m.inputs) do
       inputs[i] = reduce_rate(input, util)
+      inputs[i] = R.fifo{
+         input = inputs[i],
+         depth = 128,
+      }
+      -- R.connect{
+      --    input = inputs[i],
+      --    toModule =
    end
 
    return R.concat(inputs)
 end
 
 local dont = false -- @todo: remove
+function reduce_rate.reduce(m, util)
+   local input
+   if dont then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
+
+   local m = base(m.fn)
+   local t = m.inputType
+   local w = m.W
+   local h = m.H
+
+   local max_reduce = w*h
+   local par = math.ceil(max_reduce * util[1]/util[2])
+   par = divisor(max_reduce, par)
+
+   local in_rate = change_rate(input, { par, 1 })
+
+   local reduce_fn = m.fn
+   if reduce_fn.kind == 'lambda' then
+      reduce_fn = reduce_fn.output.fn
+   end
+
+   if par ~= 1 then
+      -- smaller reduce_par
+      local inter = R.connect{
+         input = in_rate,
+         toModule = R.HS(
+            R.modules.reduce{
+               fn = reduce_fn,
+               size = { par, 1 }
+            }
+         )
+      }
+
+      -- followed by reduce_seq
+      return R.connect{
+         input = inter,
+         toModule = R.HS(
+            R.modules.reduceSeq{
+               V = 1,
+               fn = reduce_fn,
+            }
+         )
+      }
+   else
+      -- just reduce_seq
+      return R.connect{
+         input = in_rate,
+         toModule = R.HS(
+            R.modules.reduceSeq{
+               V = 1,
+               fn = reduce_fn,
+            }
+         )
+      }
+   end
+end
+
+
 function reduce_rate.map(m, util)
    local input
    if dont then
@@ -198,8 +269,9 @@ function reduce_rate.map(m, util)
 
    local in_rate = change_rate(input, { par, 1 })
 
-   if util[1]*(max_reduce/par)/util[2] < 1 and par ~= 1 then log.warn('case of par>1 not yet implemented') end
-   if util[1]*(max_reduce/par)/util[2] < 1 and par == 1 then
+   if util[1]*(max_reduce/par)/util[2] < 1 and par ~= 1 then
+      log.warn('case of par>1 not yet implemented')
+   elseif util[1]*(max_reduce/par)/util[2] < 1 and par == 1 then
       -- we would still like to further reduce parallelism, reduce inner module
       local in_cast = R.connect{
          input = in_rate,
@@ -216,7 +288,7 @@ function reduce_rate.map(m, util)
          toModule = R.HS(m.fn)
       }
 
-      if m.fn.kind == 'map' then
+      if true then
          -- @todo: runs into issues where the reduce_rate on the inner map starts calling reduce_rate on its inputs again........
          -- @todo: this is actually probably almost the wanted behavior, we push down the new utilization through the pipeline and need to adjust certain inputs, right? for example, constSeq that is an input to this module should be reduced from [16,1][1,1] to [8,1][1,1], etc.
          -- @todo: wouldn't have this issue if reduce_rate.map was operating on modules instead of applys
@@ -440,27 +512,30 @@ function reduce_rate.upsample(m, util)
    local input = reduce_rate(m.inputs[1], util)
    local m = base(m.fn)
 
-   -- @todo: divide by util to figure out output element type
-   -- @todo: sample for downsample
+   local in_size = m.inputType.size
+   local par_in = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
+
    local out_size = m.outputType.size
-   local par = math.ceil(out_size[1]*out_size[2] * util[1]/util[2])
-   local in_size = { m.inputType.size[1], m.inputType.size[2] }
+   local par_out = math.ceil(out_size[1]*out_size[2] * util[1]/util[2] / par_in)
 
-   -- @todo: reduce in x first or in y first?
-   -- @todo: hack
-   in_size[2] = math.ceil(in_size[2]/util[2])
-   in_size[1] = math.ceil(in_size[1]/(util[2]/(m.inputType.size[2]/in_size[2])))
-   if par ~= 1 then in_size = { par, 1 } end
+   local in_rate = change_rate(input, { par_in, 1 })
 
-   local in_rate = change_rate(input, in_size)
-
-   -- @todo: this is not scanline order anymore really
-   m = R.modules.upsampleSeq{
-      type = m.type,
-      V = par,
-      size = { m.width, m.height },
-      scale = { m.scaleX, m.scaleY }
-   }
+   if par_in ~= par_out then
+      log.warn('@todo: this probably is not implemented correctly.')
+      m = R.HS(C.broadcast(m.type, par_out, 1))
+   --    -- m = R.modules.upsample{
+   --    --    type = m.type,
+   --    --    size = { 1, 1 },
+   --    --    scale = { m.scaleX, m.scaleY },
+   --    -- }
+   else
+      m = R.modules.upsampleSeq{
+         type = m.type,
+         V = par_in,
+         size = { m.width, m.height },
+         scale = { m.scaleX, m.scaleY }
+      }
+   end
 
    local inter = R.connect{
       input = in_rate,
@@ -508,13 +583,13 @@ function reduce_rate.downsample(m, util)
 end
 
 function reduce_rate.stencil(m, util)
-   log.warn('@todo: fixme')
    local input = reduce_rate(m.inputs[1], util)
 
    local m = base(m.fn)
 
    -- @todo: hack, should move this to translate probably
    -- @todo: total hack, needs extra pad and crop
+   log.warn('@todo: fixme')
    m.xmin = m.xmin - m.xmax
    m.xmax = 0
    m.ymin = m.ymin - m.ymax
@@ -525,27 +600,81 @@ function reduce_rate.stencil(m, util)
    local par = math.ceil(size[1]*size[2] * util[1]/util[2])
    par = divisor(m.w, par)
 
-   if util[1]*(size[1]*size[2]/par)/util[2] < 1 and par == 1 then
-      local m = R.modules.linebuffer{
-         type = m.inputType.over,
-         V = par,
-         size = size,
-         stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
-      }
+   local in_size = { m.w, m.h }
+   local st_size = { m.xmax - m.xmin + 1, m.ymax - m.ymin + 1} -- stencil size
+   local par_outer = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
+   local temp = (par_outer*util[2]) / (in_size[1]*size[2])
+   local par_inner = math.ceil(st_size[1]*st_size[2] / temp)
 
-      -- assert(false, '@todo: implement the columnLinebuffer thing')
-      -- local m = R.modules.columnLinebuffer{
-      --     type = m.inputType.over,
-      --     V = par,
-      --     size = size,
-      --     stencil = m.ymin
+   if par_outer == 1 and par_inner == 1 then
+      log.warn('@todo: this generates columns, suboptimal')
+      -- local m = R.modules.linebuffer{
+      --    type = m.inputType.over,
+      --    V = par_outer,
+      --    size = size,
+      --    stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
       -- }
+
+      -- local m = R.modules.stencilShiftRegister{
+      --    type = m.inputType.over,
+      --    P = par_inner,
+      --    stencil = { m.xmin, m.xmax, m.ymin, m.ymax },
+      -- }
+
+      log.warn('@todo: not thoroughly tested')
+      local m = R.modules.columnLinebuffer{
+          type = m.inputType.over,
+          V = par_inner,
+          size = size,
+          stencil = m.ymin
+      }
 
       local in_rate = change_rate(input, { par, 1 })
 
       local inter = R.connect{
          input = in_rate,
          toModule = R.HS(m)
+      }
+
+      local inter = change_rate(inter, st_size)
+
+      local inter = R.connect{
+         input = inter,
+         toModule = R.HS(
+            C.cast(
+               base(inter).outputType,
+               R.array2d(base(inter).outputType, 1, 1)
+            )
+         )
+      }
+
+      return change_rate(inter, size)
+   elseif par_outer == 1 and par_inner == st_size[2] then
+      log.warn('@todo: not thoroughly tested')
+      local m = R.modules.columnLinebuffer{
+          type = m.inputType.over,
+          V = 1,
+          size = size,
+          stencil = m.ymin
+      }
+
+      local in_rate = change_rate(input, { par, 1 })
+
+      local inter = R.connect{
+         input = in_rate,
+         toModule = R.HS(m)
+      }
+
+      local inter = change_rate(inter, st_size)
+
+      local inter = R.connect{
+         input = inter,
+         toModule = R.HS(
+            C.cast(
+               base(inter).outputType,
+               R.array2d(base(inter).outputType, 1, 1)
+            )
+         )
       }
 
       return change_rate(inter, size)
@@ -614,14 +743,34 @@ function reduce_rate.constant(m, util)
    )
 end
 
-function reduce_rate.lambda(m, util)
-   log.error('this should not have been called')
+function reduce_rate.linebuffer(m, util)
    local input = reduce_rate(m.inputs[1], util)
-   local output = reduce_rate(base(m).output, util)
 
-   log.trace(inspect(base(m), {depth = 2}))
+   local m = base(m.fn)
 
-   return inline(base(m), input)
+   return R.connect{
+      input = input,
+      toModule = R.HS(m)
+   }
+end
+
+function reduce_rate.lambda(m, util)
+   local input = reduce_rate(m.inputs[1], util)
+
+   local m = base(m.fn)
+
+   return R.connect{
+      input = input,
+      toModule = R.HS(m)
+   }
+   -- return m
+   -- log.error('this should not have been called')
+   -- local input = reduce_rate(m.inputs[1], util)
+   -- local output = reduce_rate(base(m).output, util)
+
+   -- log.trace(inspect(base(m), {depth = 2}))
+
+   -- return inline(base(m), input)
 
    -- -- assert(false, "Not yet implemented")
    -- -- @todo: recurse optimization calls here?

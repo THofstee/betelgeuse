@@ -6,6 +6,9 @@ local R = require 'rigelSimple'
 local G = require 'graphview'
 G.render = false
 
+local log = require 'log'
+log.level = 'warn'
+
 local mode = 'verilator'
 local clean_after_test = false
 
@@ -20,7 +23,7 @@ local examples = {
    'conv',       -- convolution
    'strided',    -- strided convolution
    'twopass',    -- separable convolution
-   -- 'unsharp',    -- unsharp mask
+   'unsharp',    -- unsharp mask
    'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
@@ -39,11 +42,11 @@ for _,example in ipairs(examples) do
 
    -- utilization
    local rates = {
-      { 1, 32 },
-      { 1, 16 },
-      { 1,  8 },
-      { 1,  4 },
-      { 1,  2 },
+      -- { 1, 32 },
+      -- { 1, 16 },
+      -- { 1,  8 },
+      -- { 1,  4 },
+      -- { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
@@ -106,3 +109,7 @@ end
 print(inspect(results))
 
 lfs.chdir('..')
+
+local f = assert(io.open('results/cycles.txt', 'w'))
+f:write(inspect(results))
+f:close()
