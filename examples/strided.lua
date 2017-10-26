@@ -40,9 +40,8 @@ res = P.translate(mod)
 res = P.transform(res, util)
 res = P.streamify(res, rate)
 res = P.peephole(res)
-res = P.make_mem_happy(res)
-
 G(res)
+res = P.make_mem_happy(res)
 
 -- call harness
 local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }

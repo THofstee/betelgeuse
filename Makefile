@@ -29,6 +29,10 @@ rigel-clean:
 clean:
 	rm -rf out/*
 
+.PHONY: results
+results:
+	luajit results/run-tests.lua
+
 .PHONY: doc
 doc:
 	ldoc .

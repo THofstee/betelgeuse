@@ -18,13 +18,13 @@ lfs.chdir('examples')
 os.execute('make clean')
 
 local examples = {
-   'updown',     -- upsample -> downsample
-   'box_filter', -- like a convolution but no weights
+   -- 'updown',     -- upsample -> downsample
+   -- 'box_filter', -- like a convolution but no weights
    'conv',       -- convolution
-   'strided',    -- strided convolution
-   'twopass',    -- separable convolution
-   'unsharp',    -- unsharp mask
-   'harris',     -- harris corner detection
+   -- 'strided',    -- strided convolution
+   -- 'twopass',    -- separable convolution
+   -- 'unsharp',    -- unsharp mask
+   -- 'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
    -- 'flow',       -- lucas-kanade optical flow
@@ -42,11 +42,11 @@ for _,example in ipairs(examples) do
 
    -- utilization
    local rates = {
-      -- { 1, 32 },
-      -- { 1, 16 },
-      -- { 1,  8 },
-      -- { 1,  4 },
-      -- { 1,  2 },
+      { 1, 32 },
+      { 1, 16 },
+      { 1,  8 },
+      { 1,  4 },
+      { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
@@ -95,7 +95,7 @@ for _,example in ipairs(examples) do
          local s = assert(f:read('*a'))
          f:close()
 
-         res.cycles = string.match(s, 'Cycles: (%d+)')
+         res.cycles = tonumber(string.match(s, 'Cycles: (%d+)'))
 
          results[example][rate] = res
       elseif mode == 'axi' then
@@ -106,10 +106,18 @@ for _,example in ipairs(examples) do
    end
 end
 
-print(inspect(results))
+lfs.chdir('../results/')
 
-lfs.chdir('..')
+local pareto = require 'pareto'
+pareto(results)
 
-local f = assert(io.open('results/cycles.txt', 'w'))
+local serialize = require 'serialize'
+print(serialize(results))
+
+local f = assert(io.open('cycles.lua', 'w'))
 f:write(inspect(results))
+f:close()
+
+local f = assert(io.open('cycles.txt', 'w'))
+f:write(serialize(results))
 f:close()

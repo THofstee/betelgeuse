@@ -176,17 +176,31 @@ function reduce_rate.concat(m, util)
    local inputs = {}
    for i,input in ipairs(m.inputs) do
       inputs[i] = reduce_rate(input, util)
-      inputs[i] = R.fifo{
-         input = inputs[i],
-         depth = 128,
-      }
-      -- R.connect{
-      --    input = inputs[i],
-      --    toModule =
    end
 
    return R.concat(inputs)
 end
+
+-- function reduce_rate.concat(m, util)
+--    for i,input in ipairs(m.inputs) do
+--       local in_type = base(input).outputType
+--       -- log.trace(inspect(in_type, {depth = 2}))
+--    end
+
+--    -- local inputs = {}
+--    -- for i,input in ipairs(m.inputs) do
+--    --    inputs[i] = reduce_rate(input, util)
+--    --    inputs[i] = R.fifo{
+--    --       input = inputs[i],
+--    --       depth = 128,
+--    --    }
+--    --    -- R.connect{
+--    --    --    input = inputs[i],
+--    --    --    toModule =
+--    -- end
+
+--    return R.concat(inputs)
+-- end
 
 local dont = false -- @todo: remove
 function reduce_rate.reduce(m, util)

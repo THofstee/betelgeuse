@@ -1,10 +1,10 @@
 ;; Project Specific
-dbg/*
-doc/*
-out/*
+dbg
+doc
+out
+graphs
 examples/*.raw
 examples/Makefile
-examples/out
 misc
 platform
 
