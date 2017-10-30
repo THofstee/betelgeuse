@@ -66,14 +66,6 @@ for i, x in ipairs(modes) do
     local fname = string.match(info.short_src, '%a+.lua')
     local lineinfo = fname .. ":" .. info.currentline
 
-    -- Output to console
-    print(string.format("%s[%-6s%s]%s %s",
-                        log.usecolor and x.color or "",
-                        nameupper,
-                        lineinfo,
-                        log.usecolor and "\27[0m" or "",
-                        msg))
-
     -- Output to log file
     if log.outfile then
       local fp = io.open(log.outfile, "a")
@@ -82,6 +74,14 @@ for i, x in ipairs(modes) do
       fp:write(str)
       fp:close()
     end
+
+    -- Output to console
+    print(string.format("%s[%-6s%s]%s %s",
+                        log.usecolor and x.color or "",
+                        nameupper,
+                        lineinfo,
+                        log.usecolor and "\27[0m" or "",
+                        msg))
 
   end
 end

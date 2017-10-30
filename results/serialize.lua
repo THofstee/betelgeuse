@@ -1,10 +1,10 @@
 local function serialize(results)
    -- format all results and add to a table
-   local s = {}
+   local t = {}
    local n = 1
    for prog, data in pairs(results) do
       for rate, perf in pairs(data) do
-         s[n] = {
+         t[n] = {
             prog,
             rate[1], rate[2],
             perf.cycles or 0,
@@ -23,17 +23,19 @@ local function serialize(results)
       end
    end
 
-   table.sort(s, f)
+   table.sort(t, f)
 
    -- return string
    local s = ''
    s = s .. 'examples,rate,cycles,area' .. '\n'
-   for _, v in ipairs(s) do
+   for _, v in ipairs(t) do
       s = s .. v[1] .. ','                -- example
       s = s .. v[2] .. '/' .. v[3] .. ',' -- rate
       s = s .. v[4] .. ','                -- cycles
       s = s .. v[5] .. '\n'               -- area
    end
+
+   return s
 end
 
 return serialize

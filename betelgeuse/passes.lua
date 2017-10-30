@@ -418,6 +418,8 @@ local function peephole(m)
                -- remove redundant casts
                return inputs[1]
             end
+         elseif temp_cur.generator == 'C.identity' then
+            return inputs[1]
          elseif temp_cur.kind == 'upsampleXSeq' then
             if base(inputs[1]).kind == 'constSeq' then
                -- constSeq to an upsample of the same type doesn't need upsample

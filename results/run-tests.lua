@@ -20,7 +20,7 @@ os.execute('make clean')
 local examples = {
    -- 'updown',     -- upsample -> downsample
    -- 'box_filter', -- like a convolution but no weights
-   'conv',       -- convolution
+   'conv2',      -- convolution
    -- 'strided',    -- strided convolution
    -- 'twopass',    -- separable convolution
    -- 'unsharp',    -- unsharp mask
@@ -44,9 +44,9 @@ for _,example in ipairs(examples) do
    local rates = {
       { 1, 32 },
       { 1, 16 },
-      { 1,  8 },
-      { 1,  4 },
-      { 1,  2 },
+      -- { 1,  8 },
+      -- { 1,  4 },
+      -- { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
