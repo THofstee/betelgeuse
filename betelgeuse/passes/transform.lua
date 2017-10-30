@@ -810,6 +810,15 @@ function reduce_rate.lambda(m, util)
    --    toModule = R.HS(m)
    -- }
    -- -- return m
+
+   -- the only time that this function should be called (hopefully) is
+   -- when we have a map(lambda). in this case, the map has fully reduced
+   -- its parallelism to [1,1], and we want to reduce further with the lambda.
+   -- this means it should be okay to just inline the module here, and then
+   -- call reduce_rate again on the inlined module to actually perform the
+   -- reduction.
+
+   -- @todo: what about reduce(lambda)? does this just become lambda -> reduceSeq?
    local input = reduce_rate(m.inputs[1], util)
 
    local m = inline_hs(base(m), input)
