@@ -30,7 +30,8 @@ clean:
 	rm -rf out/*
 
 .PHONY: results
-results:
+results: rigel
+	mkdir -p examples/dbg
 	luajit results/run-tests.lua
 
 .PHONY: doc
