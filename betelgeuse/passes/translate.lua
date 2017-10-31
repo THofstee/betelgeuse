@@ -218,7 +218,7 @@ function translate.sub(m)
    -- concatenate aligned inputs
    local concat = R.concat{in1_shift, in2_shift}
 
-   -- now we can just sum like an integer
+   -- now we can just sub like an integer
    local output = R.connect{
       input = concat,
       toModule = R.modules.sub{
