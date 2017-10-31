@@ -32,6 +32,7 @@ clean:
 .PHONY: results
 results: rigel
 	mkdir -p examples/dbg
+	mkdir -p results/graphs
 	luajit results/run-tests.lua
 
 .PHONY: doc
