@@ -35,6 +35,10 @@ results: rigel
 	mkdir -p results/graphs
 	luajit results/run-tests.lua
 
+.PHONY: clipboard
+clipboard: results
+	column -s, -t results/cycles.txt | xclip -selection c
+
 .PHONY: doc
 doc:
 	ldoc .

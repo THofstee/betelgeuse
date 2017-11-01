@@ -20,11 +20,11 @@ os.execute('make clean')
 local examples = {
    -- 'updown',     -- upsample -> downsample
    -- 'box_filter', -- like a convolution but no weights
-   'conv2',      -- convolution
+   -- 'conv2',      -- convolution
    -- 'strided',    -- strided convolution
    -- 'twopass',    -- separable convolution
    -- 'unsharp',    -- unsharp mask
-   -- 'harris',     -- harris corner detection
+   'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
    -- 'flow',       -- lucas-kanade optical flow
@@ -44,9 +44,9 @@ for _,example in ipairs(examples) do
    local rates = {
       { 1, 32 },
       { 1, 16 },
-      -- { 1,  8 },
-      -- { 1,  4 },
-      -- { 1,  2 },
+      { 1,  8 },
+      { 1,  4 },
+      { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
@@ -111,13 +111,13 @@ lfs.chdir('../results/')
 local pareto = require 'pareto'
 pareto(results)
 
-local serialize = require 'serialize'
-print(serialize(results))
-
 local f = assert(io.open('cycles.lua', 'w'))
 f:write(inspect(results))
 f:close()
 
+local serialize = require 'serialize'
 local f = assert(io.open('cycles.txt', 'w'))
 f:write(serialize(results))
 f:close()
+
+os.execute('column -s, -t cycles.txt')

@@ -39,9 +39,9 @@ G(mod)
 local res
 local util = P.reduction_factor(mod, rate)
 res = P.translate(mod)
-res = P.transform(res, util)
+-- res = P.transform(res, util)
 res = P.streamify(res, rate)
-res = P.peephole(res)
+-- res = P.peephole(res)
 G(res)
 res = P.make_mem_happy(res)
 
@@ -52,7 +52,7 @@ local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 local fname = arg[0]:match("([^/]+).lua")
 
 R.harness{
-   backend = 'verilog',
+   backend = 'terra',
    fn = res,
    inFile = "box_32.raw", inSize = in_size,
    outFile = fname, outSize = out_size,
