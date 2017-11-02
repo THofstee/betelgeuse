@@ -15,7 +15,7 @@ local clean_after_test = false
 local lfs = require 'lfs'
 lfs.chdir('examples')
 
--- os.execute('make clean')
+os.execute('make clean')
 
 local examples = {
    'updown',     -- upsample -> downsample
@@ -34,6 +34,37 @@ local examples = {
 
 local results = {}
 
+local function write_results(results)
+   local pareto = require 'pareto'
+   pareto(results)
+
+   local f = assert(io.open('cycles.lua', 'w'))
+   f:write(inspect(results))
+   f:close()
+
+   local serialize = require 'serialize'
+   local f = assert(io.open('cycles.txt', 'w'))
+   f:write(serialize(results))
+   f:close()
+
+   local f = assert(io.popen('column -s, -t cycles.txt'))
+   local s = assert(f:read('*l'))
+   while true do
+     print(s)
+     local ns = f:read('*l')
+
+     if not ns then
+       break
+     end
+
+     if string.match(ns, "%a+") ~= string.match(s, "%a+") then
+       print()
+     end
+     s = ns
+   end
+   f:close()
+end
+
 for _,example in ipairs(examples) do
    local filename = example .. '.lua'
    local mod = dofile(filename)
@@ -43,11 +74,11 @@ for _,example in ipairs(examples) do
    -- utilization
    local rates = {
       { 1, 32 },
-      -- { 1, 16 },
+      { 1, 16 },
       -- { 1,  8 },
       -- { 1,  4 },
       -- { 1,  2 },
-      -- { 1,  1 },
+      { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
       -- { 8,  1 },
@@ -109,7 +140,6 @@ for _,example in ipairs(examples) do
          f:close()
 
          -- get area
-         local filename = 'updown'
          local f = io.open('out/build_' .. filename .. '/OUT_par.txt')
          local s = f:read('*a')
          f:close()
@@ -130,37 +160,13 @@ for _,example in ipairs(examples) do
       else
          assert(false, 'Unsupported mode')
       end
+
+      -- save results after each run
+      lfs.chdir('../results/')
+      write_results(results)
+      lfs.chdir('../examples')
    end
 end
 
 lfs.chdir('../results/')
-
-local pareto = require 'pareto'
-pareto(results)
-
-local f = assert(io.open('cycles.lua', 'w'))
-f:write(inspect(results))
-f:close()
-
-local serialize = require 'serialize'
-local f = assert(io.open('cycles.txt', 'w'))
-f:write(serialize(results))
-f:close()
-
-local f = assert(io.popen('column -s, -t cycles.txt'))
-local s = assert(f:read('*l'))
-while true do
-  print(s)
-  local ns = f:read('*l')
-
-  if not ns then
-    break
-  end
-
-  if string.match(ns, "%a+") ~= string.match(s, "%a+") then
-    print()
-  end
-  s = ns
-end
-f:close()
-
+write_results(results)
