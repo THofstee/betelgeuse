@@ -18,13 +18,13 @@ lfs.chdir('examples')
 os.execute('make clean')
 
 local examples = {
-   -- 'updown',     -- upsample -> downsample
-   -- 'box_filter', -- like a convolution but no weights
-   -- 'conv2',      -- convolution
-   -- 'strided',    -- strided convolution
-   -- 'twopass',    -- separable convolution
-   -- 'unsharp',    -- unsharp mask
-   'harris',     -- harris corner detection
+   'updown',     -- upsample -> downsample
+   'box_filter', -- like a convolution but no weights
+--   'conv2',      -- convolution
+--   'strided',    -- strided convolution
+--   'twopass',    -- separable convolution
+--   'unsharp',    -- unsharp mask
+--   'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
    -- 'flow',       -- lucas-kanade optical flow
@@ -97,6 +97,8 @@ for _,example in ipairs(examples) do
 
          res.cycles = tonumber(string.match(s, 'Cycles: (%d+)'))
 
+         res.correct = os.execute('diff gold/' .. example .. '.bmp out/' .. filename .. '.verilator.bmp') == 0
+
          results[example][rate] = res
       elseif mode == 'axi' then
          assert(false, 'axi test suite not yet supported')
@@ -120,4 +122,20 @@ local f = assert(io.open('cycles.txt', 'w'))
 f:write(serialize(results))
 f:close()
 
-os.execute('column -s, -t cycles.txt')
+local f = assert(io.popen('column -s, -t cycles.txt'))
+local s = assert(f:read('*l'))
+while true do
+  print(s)
+  local ns = f:read('*l')
+
+  if not ns then
+    break
+  end
+
+  if string.match(ns, "%a+") ~= string.match(s, "%a+") then
+    print()
+  end
+  s = ns
+end
+f:close()
+

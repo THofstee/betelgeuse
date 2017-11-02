@@ -8,7 +8,8 @@ local function serialize(results)
             example = prog,
             rate = rate,
             cycles = perf.cycles or 0,
-            area = perf.area or 0
+            area = perf.area or 0,
+            correct = perf.correct,
          }
          n = n+1
       end
@@ -58,10 +59,10 @@ local function serialize(results)
          s = s .. test.example .. ','
          s = s .. test.rate[1] .. '/' .. test.rate[2] .. ','
          s = s .. test.cycles .. ','
-         s = s .. test.cycles / example.base_cycles .. ','
+         s = s .. string.format("%.2f", test.cycles/example.base_cycles) .. ','
          s = s .. test.area .. ','
-         s = s .. test.area / example.base_area .. ','
-         s = s .. 'false' .. '\n' -- @todo: check correctness
+         s = s .. string.format("%.2f", test.area/example.base_area) .. ','
+         s = s .. tostring(test.correct or false) .. '\n'
       end
       s = s .. '\n'
    end
