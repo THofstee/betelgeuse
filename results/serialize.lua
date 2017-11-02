@@ -63,6 +63,7 @@ local function serialize(results)
          s = s .. test.area / example.base_area .. ','
          s = s .. 'false' .. '\n' -- @todo: check correctness
       end
+      s = s .. '\n'
    end
 
    return s
