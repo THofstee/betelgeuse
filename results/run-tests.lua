@@ -9,17 +9,17 @@ G.render = false
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'verilator'
+local mode = 'axi'
 local clean_after_test = false
 
 local lfs = require 'lfs'
 lfs.chdir('examples')
 
-os.execute('make clean')
+-- os.execute('make clean')
 
 local examples = {
    'updown',     -- upsample -> downsample
-   'box_filter', -- like a convolution but no weights
+   -- 'box_filter', -- like a convolution but no weights
 --   'conv2',      -- convolution
 --   'strided',    -- strided convolution
 --   'twopass',    -- separable convolution
@@ -43,11 +43,11 @@ for _,example in ipairs(examples) do
    -- utilization
    local rates = {
       { 1, 32 },
-      { 1, 16 },
+      -- { 1, 16 },
       -- { 1,  8 },
       -- { 1,  4 },
       -- { 1,  2 },
-      { 1,  1 },
+      -- { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
       -- { 8,  1 },
@@ -101,7 +101,32 @@ for _,example in ipairs(examples) do
 
          results[example][rate] = res
       elseif mode == 'axi' then
-         assert(false, 'axi test suite not yet supported')
+         local res = {}
+
+         local f = assert(io.popen('make out/' .. filename .. '.axi.bmp'))     -- old makefile
+         -- local f = assert(io.popen('make out/' .. filename .. 'zynq20ise.bit'))
+         local s = assert(f:read('*a'))
+         f:close()
+
+         -- get area
+         local filename = 'updown'
+         local f = io.open('out/build_' .. filename .. '/OUT_par.txt')
+         local s = f:read('*a')
+         f:close()
+
+         res.area = string.match(s, "Number of Slices.-(%d+).-\n")
+
+         -- get cycles
+         local f = io.open('out/' .. filename .. '.axi.cycles.txt')
+         local s = f:read('*a')
+         f:close()
+
+         res.cycles = string.match(s, "(%d+)")
+
+         -- check for correctness
+         res.correct = os.execute('diff gold/' .. example .. '.bmp out/' .. filename .. '.axi.bmp') == 0
+
+         results[example][rate] = res
       else
          assert(false, 'Unsupported mode')
       end

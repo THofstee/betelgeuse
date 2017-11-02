@@ -34,7 +34,12 @@ local function serialize(results)
       if example ~= v.example then
          example = v.example
          i = i+1
-         t2[i] = { example = v.example, tests = {} }
+         t2[i] = { 
+            example = v.example, 
+            base_cycles = 0, 
+            base_area = 0,
+            tests = {},
+         }
       end
 
       if v.rate[1] * v.rate[2] == 1 then
