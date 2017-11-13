@@ -9,7 +9,7 @@ G.render = false
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'axi'
+local mode = 'verilator'
 local clean_after_test = false
 
 local lfs = require 'lfs'
@@ -18,13 +18,13 @@ lfs.chdir('examples')
 os.execute('make clean')
 
 local examples = {
-   'updown',     -- upsample -> downsample
-   -- 'box_filter', -- like a convolution but no weights
---   'conv2',      -- convolution
---   'strided',    -- strided convolution
---   'twopass',    -- separable convolution
---   'unsharp',    -- unsharp mask
---   'harris',     -- harris corner detection
+   -- 'updown',     -- upsample -> downsample
+   'box_filter', -- like a convolution but no weights
+   -- 'conv2',      -- convolution
+   -- 'strided',    -- strided convolution
+   -- 'twopass',    -- separable convolution
+   -- 'unsharp',    -- unsharp mask
+   -- 'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
    -- 'flow',       -- lucas-kanade optical flow
@@ -73,10 +73,10 @@ for _,example in ipairs(examples) do
 
    -- utilization
    local rates = {
-      { 1, 32 },
+      -- { 1, 32 },
       { 1, 16 },
       -- { 1,  8 },
-      -- { 1,  4 },
+      { 1,  4 },
       -- { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
@@ -167,6 +167,3 @@ for _,example in ipairs(examples) do
       lfs.chdir('../examples')
    end
 end
-
-lfs.chdir('../results/')
-write_results(results)

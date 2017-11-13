@@ -9,6 +9,7 @@ local log = require 'log'
 local to_handshake = require 'betelgeuse.passes.to_handshake'
 
 local _VERBOSE = true
+local DONT = false
 
 local function linenum(level)
    return debug.getinfo(level or 2, 'l').currentline
@@ -202,10 +203,9 @@ end
 --    return R.concat(inputs)
 -- end
 
-local dont = false -- @todo: remove
 function reduce_rate.reduce(m, util)
    local input
-   if dont then
+   if DONT then
       input = m.inputs[1]
    else
       input = reduce_rate(m.inputs[1], util)
@@ -244,7 +244,7 @@ function reduce_rate.reduce(m, util)
          input = inter,
          toModule = R.HS(
             R.modules.reduceSeq{
-               V = 1,
+               V = max_reduce/par,
                fn = reduce_fn,
             }
          )
@@ -255,7 +255,7 @@ function reduce_rate.reduce(m, util)
          input = in_rate,
          toModule = R.HS(
             R.modules.reduceSeq{
-               V = 1,
+               V = max_reduce/par,
                fn = reduce_fn,
             }
          )
@@ -266,7 +266,7 @@ end
 
 function reduce_rate.map(m, util)
    local input
-   if dont then
+   if DONT then
       input = m.inputs[1]
    else
       input = reduce_rate(m.inputs[1], util)
@@ -302,14 +302,14 @@ function reduce_rate.map(m, util)
          toModule = R.HS(m.fn)
       }
 
-      if true then
+      if not DONT then
          -- @todo: runs into issues where the reduce_rate on the inner map starts calling reduce_rate on its inputs again........
          -- @todo: this is actually probably almost the wanted behavior, we push down the new utilization through the pipeline and need to adjust certain inputs, right? for example, constSeq that is an input to this module should be reduced from [16,1][1,1] to [8,1][1,1], etc.
          -- @todo: wouldn't have this issue if reduce_rate.map was operating on modules instead of applys
          -- @todo: maybe still can be on applys, but then internally theres a reduce_rate that operates on the modules, and then the outer function that works on applys still inlines everything? this way i can still keep the weird concat -> packtuple -> soatoaos thing in its own function instead of reduce_rate.apply
 
          -- @todo: this might not be needed
-         -- dont = true
+         DONT = true
 
          -- @todo: I dont think this should be calling reduce_rate?
          -- @todo: reduce_rate should really probably just take in modules...
@@ -323,6 +323,7 @@ function reduce_rate.map(m, util)
          --        existing piece. this either means that this shouldn't call reduce_rate,
          --        reduce_rate shouldn't work on the inputs unless its an apply, or that
          --        the don't flag is not needed.
+         log.trace('reducing inner module of a map')
          local m2 = reduce_rate(inter, { util[1], math.floor(util[2]/max_reduce) })
 
          -- @todo: commented out lines meant for par > 1, where we still need outer map but operating over a rate reduced inner module
@@ -335,7 +336,7 @@ function reduce_rate.map(m, util)
          --		input = in_rate,
          --		toModule = R.HS(m)
          -- }
-         -- dont = false
+         -- DONT = false
 
          -- return change_rate(inter, { w, h })
          local out_cast = R.connect{
@@ -348,7 +349,7 @@ function reduce_rate.map(m, util)
             )
          }
 
-         dont = false
+         DONT = false
          return change_rate(out_cast, { w, h })
       end
 
@@ -381,7 +382,12 @@ end
 
 function reduce_rate.SoAtoAoS(m, util)
    log.warn('@todo: implement')
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
 
    local m = m.fn
    local t = m.inputType
@@ -431,7 +437,12 @@ end
 
 function reduce_rate.broadcast(m, util)
    -- @todo: broken for inputs with par > 1
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
    local m = base(m.fn)
 
    local out_size = m.outputType.size
@@ -461,20 +472,35 @@ function reduce_rate.broadcast(m, util)
 end
 
 function reduce_rate.lift(m, util)
+   local what = base(m.fn).generator or base(m.fn).kind
+   log.trace('[reduce_rate.lift] ' .. what)
+
    -- certain modules need to be reduced, but are implemented as lifts
    if base(m.fn).generator == 'C.broadcast' then
       return reduce_rate.broadcast(m, util)
    end
 
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
+
    -- otherwise, don't do anything
    return R.connect{
-      input = reduce_rate(m.inputs[1], util),
+      input = input,
       toModule = R.HS(m.fn)
    }
 end
 
 function reduce_rate.pad(m, util)
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
    local m = base(m.fn)
 
    local t = m.inputType
@@ -505,7 +531,12 @@ function reduce_rate.pad(m, util)
 end
 
 function reduce_rate.crop(m, util)
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
 
    -- @todo: double check implementation
    local m = base(m.fn)
@@ -538,7 +569,12 @@ end
 
 function reduce_rate.upsample(m, util)
    -- @todo: change to be upsampleY first then upsampleX, once implemented
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
    local m = base(m.fn)
 
    local in_size = m.inputType.size
@@ -575,7 +611,12 @@ function reduce_rate.upsample(m, util)
 end
 
 function reduce_rate.downsample(m, util)
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
    local m = base(m.fn)
 
    local in_size = m.inputType.size
@@ -611,9 +652,16 @@ function reduce_rate.downsample(m, util)
    return change_rate(inter, out_size)
 end
 
+local STP = require 'StackTracePlus'
+
 function reduce_rate.SSR(m, util)
    log.warn('passthrough')
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
 
    local m = base(m.fn)
 
@@ -625,7 +673,12 @@ end
 
 function reduce_rate.unpackStencil(m, util)
    log.warn('passthrough')
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
 
    local m = base(m.fn)
 
@@ -636,7 +689,12 @@ function reduce_rate.unpackStencil(m, util)
 end
 
 function reduce_rate.stencil(m, util)
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
 
    local m = base(m.fn)
 
@@ -677,6 +735,9 @@ function reduce_rate.stencil(m, util)
       toModule = R.HS(m)
    }
 
+   log.debug('par_outer: ' .. inspect(par_outer))
+   log.debug('par_inner: ' .. inspect(par_inner))
+
    if par_outer == 1 then
       -- a reduced rate stencil should be a linebuffer that feeds into a changerate
       -- e.g. linebuffer creates uint[4,4] -> changeRate creates uint[1,1]
@@ -716,7 +777,12 @@ function reduce_rate.stencil(m, util)
 end
 
 function reduce_rate.packTuple(m, util)
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
 
    local m = base(m.fn)
 
@@ -789,7 +855,12 @@ function reduce_rate.constant(m, util)
 end
 
 function reduce_rate.linebuffer(m, util)
-   local input = reduce_rate(m.inputs[1], util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
 
    local m = base(m.fn)
 
@@ -801,7 +872,12 @@ end
 
 function reduce_rate.lambda(m, util)
    -- -- log.error('this should not have been called')
-   -- local input = reduce_rate(m.inputs[1], util)
+   -- local input
+   -- if DONT then
+   --    input = m.inputs[1]
+   -- else
+   --    input = reduce_rate(m.inputs[1], util)
+   -- end
 
    -- local m = base(m.fn)
 
@@ -819,7 +895,7 @@ function reduce_rate.lambda(m, util)
    -- reduction.
 
    -- @todo: what about reduce(lambda)? does this just become lambda -> reduceSeq?
-   local input = reduce_rate(m.inputs[1], util)
+   local input = m.inputs[1] -- reduce_rate(m.inputs[1], util)
 
    local m = inline_hs(base(m), input)
 
@@ -913,7 +989,8 @@ end
 if _VERBOSE then
    for k,v in pairs(reduce_rate) do
       reduce_rate[k] = function(m, util)
-         log.trace('reduce_rate.' .. k)
+         log.trace('reduce_rate.' .. k ..
+                      '(..., ' .. '{ ' .. util[1] .. ' , ' .. util[2] .. ' }' .. ')')
          return v(m, util)
       end
    end
