@@ -9,13 +9,22 @@ local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 -- two pass
 local im_size = { 32, 32 }
 
-local blury = L.const(L.array2d(L.fixed(9, 0), 1, 3), {
+-- local blury = L.const(L.array2d(L.fixed(9, 0), 1, 3), {
+--                       { 1 },
+--                       { 2 },
+--                       { 1 }})
+
+-- local blurx = L.const(L.array2d(L.fixed(9, 0), 3, 1), {
+--                       { 1, 2, 1 }})
+
+local blury = L.const(L.array2d(L.fixed(9, 0), 1, 4), {
                       { 1 },
-                      { 2 },
+                      { 3 },
+                      { 3 },
                       { 1 }})
 
-local blurx = L.const(L.array2d(L.fixed(9, 0), 3, 1), {
-                      { 1, 2, 1 }})
+local blurx = L.const(L.array2d(L.fixed(9, 0), 4, 1), {
+                      { 1, 3, 3, 1 }})
 
 local dx = L.const(L.array2d(L.fixed(9, 0), 3, 1), {
                       { 1, 0, -1 }})
@@ -41,8 +50,10 @@ end
 
 local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 -- local x1 = conv({ -1, 0, 3, 1 }, dx)(I)
-local x1 = L.chain(conv({ -1, 0, 3, 1 }, blurx), L.map(L.shift(2)))(I)
-local x2 = L.chain(conv({ 0, -1, 1, 3 }, blury), L.map(L.shift(2)))(x1)
+-- local x1 = L.chain(conv({ -1, 0, 3, 1 }, blurx), L.map(L.shift(2)))(I)
+-- local x2 = L.chain(conv({ 0, -1, 1, 3 }, blury), L.map(L.shift(2)))(x1)
+local x1 = L.chain(conv({ -1, 0, 4, 1 }, blurx), L.map(L.shift(3)))(I)
+local x2 = L.chain(conv({ 0, -1, 1, 4 }, blury), L.map(L.shift(3)))(x1)
 local mod = L.lambda(x2, I)
 G(mod)
 

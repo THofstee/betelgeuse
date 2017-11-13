@@ -18,12 +18,12 @@ lfs.chdir('examples')
 os.execute('make clean')
 
 local examples = {
-   -- 'updown',     -- upsample -> downsample
+   'updown',     -- upsample -> downsample
    'box_filter', -- like a convolution but no weights
-   -- 'conv2',      -- convolution
-   -- 'strided',    -- strided convolution
-   -- 'twopass',    -- separable convolution
-   -- 'unsharp',    -- unsharp mask
+   'conv2',      -- convolution
+   'strided',    -- strided convolution
+   'twopass',    -- separable convolution
+   'unsharp',    -- unsharp mask
    -- 'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
