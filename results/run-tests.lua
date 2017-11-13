@@ -15,16 +15,16 @@ local clean_after_test = false
 local lfs = require 'lfs'
 lfs.chdir('examples')
 
-os.execute('make clean')
+-- os.execute('make clean')
 
 local examples = {
    'updown',     -- upsample -> downsample
    'box_filter', -- like a convolution but no weights
    'conv2',      -- convolution
-   'strided',    -- strided convolution
+   -- 'strided',    -- strided convolution
    'twopass',    -- separable convolution
    'unsharp',    -- unsharp mask
-   -- 'harris',     -- harris corner detection
+   'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
    -- 'flow',       -- lucas-kanade optical flow
