@@ -18,6 +18,7 @@ local L = require 'betelgeuse.lang'
 
 -- @todo: remove this after debugging
 local inspect = require 'inspect'
+local log = require 'log'
 
 local function linenum(level)
    return debug.getinfo(level or 2, 'l').currentline
@@ -181,6 +182,9 @@ local function inline(m, input)
             }
          elseif cur.kind == 'concat' then
             return R.concat(inputs)
+         elseif cur.kind == 'applyMethod' then
+            log.trace(cur.fnname)
+            return cur
          else
             assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
          end
@@ -492,6 +496,7 @@ end
 P.peephole = peephole
 
 local function make_mem_happy(m)
+   print(inspect(m, {depth = 2}))
    local input = R.input(R.HS(R.array2d(rtypes.uint(8), m.inputType.params.A.size[1], m.inputType.params.A.size[2])))
 
    local cast = R.connect{

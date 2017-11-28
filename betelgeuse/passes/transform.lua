@@ -52,6 +52,10 @@ local function get_input(m)
       return nil
    end
 
+   if m.kind == 'input' then
+      return m
+   end
+
    return get_input(m.inputs[1]) or get_input(m.inputs[2])
 end
 
@@ -497,21 +501,10 @@ function reduce_rate.buffer(m, util)
 
    local in_rate = change_rate(input, { par, 1 })
 
-   -- print(m.inputType)
-   -- print(m.outputType)
-
-   -- print(inspect(input, {depth = 2}))
-   -- print(inspect(in_cast, {depth = 2}))
-   log.trace(in_rate.type)
-
-   local inter = R.fifo{
+   local inter = R.connect{
       input = in_rate,
-      depth = m.depth,
+      toModule = C.fifo(in_rate.type.params.A, m.depth)
    }
-
-   log.trace(inter.type)
-   log.trace(inspect(inter, {depth = 2}))
-   log.trace(inspect(inter.inst, {depth = 2}))
 
    local res = change_rate(inter, out_size)
 
@@ -834,14 +827,9 @@ function reduce_rate.packTuple(m, util)
 
    local m = base(m.fn)
 
-   local hack = {}
-   for i,t in ipairs(m.inputType.list) do
-      hack[i] = t.params.A
-   end
-
    return R.connect{
       input = input,
-      toModule = RM.packTuple(hack)
+      toModule = RM.packTuple(m.inputType.params.list)
    }
 end
 
@@ -1025,12 +1013,8 @@ local function transform(m, util)
    output = reduce_rate(output, util)
 
    if m.kind == 'lambda' then
-      local input = get_input(output)
-
-      log.trace(inspect(input, {depth = 2}))
-
       return R.defineModule{
-         input = input,
+         input = get_input(output),
          output = output
       }
    else
