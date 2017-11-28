@@ -28,6 +28,7 @@ Module = add(boolean expanding)
        | div(boolean expanding)
        | shift(number n, boolean expanding)
        | trunc(number i, number f)
+       | buffer(number size)
        | map(Module m)
        | reduce(Module m)
        | zip
@@ -329,6 +330,15 @@ function L.trunc(i, f)
    end
 
    return L_wrap(T.trunc(i, f, type_func))
+end
+
+--- Buffers a stream with a FIFO queue.
+function L.buffer(size)
+   local function type_func(t)
+      return t
+   end
+
+   return L_wrap(T.buffer(size, type_func))
 end
 
 --- Returns a module that is a map given a module to apply.

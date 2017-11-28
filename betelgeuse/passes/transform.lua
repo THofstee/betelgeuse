@@ -42,10 +42,17 @@ local function base(m)
 end
 
 local function get_input(m)
-   while m.inputs[1] do
-      m = m.inputs[1]
+   -- while m.inputs[1] do
+   --    m = m.inputs[1]
+   -- end
+
+   -- return m
+
+   if not m then
+      return nil
    end
-   return m
+
+   return get_input(m.inputs[1]) or get_input(m.inputs[2])
 end
 
 local function change_rate(input, out_size)
@@ -471,6 +478,47 @@ function reduce_rate.broadcast(m, util)
    return change_rate(inter, out_size)
 end
 
+function reduce_rate.buffer(m, util)
+   local input
+   if DONT then
+      input = m.inputs[1]
+   else
+      input = reduce_rate(m.inputs[1], util)
+   end
+
+   -- return input
+   local m = base(m.fn)
+
+   local out_size = m.outputType.size
+
+   local max_reduce = out_size[1]*out_size[2]
+   local par = math.ceil(max_reduce * util[1]/util[2])
+   par = divisor(max_reduce, par)
+
+   local in_rate = change_rate(input, { par, 1 })
+
+   -- print(m.inputType)
+   -- print(m.outputType)
+
+   -- print(inspect(input, {depth = 2}))
+   -- print(inspect(in_cast, {depth = 2}))
+   log.trace(in_rate.type)
+
+   local inter = R.fifo{
+      input = in_rate,
+      depth = m.depth,
+   }
+
+   log.trace(inter.type)
+   log.trace(inspect(inter, {depth = 2}))
+   log.trace(inspect(inter.inst, {depth = 2}))
+
+   local res = change_rate(inter, out_size)
+
+   assert(res.type == input.type, "buffer input type and output type should match")
+   return res
+end
+
 function reduce_rate.lift(m, util)
    local what = base(m.fn).generator or base(m.fn).kind
    log.trace('[reduce_rate.lift] ' .. what)
@@ -478,6 +526,8 @@ function reduce_rate.lift(m, util)
    -- certain modules need to be reduced, but are implemented as lifts
    if base(m.fn).generator == 'C.broadcast' then
       return reduce_rate.broadcast(m, util)
+   elseif base(m.fn).generator == 'buffer' then
+      return reduce_rate.buffer(m, util)
    end
 
    local input
@@ -651,8 +701,6 @@ function reduce_rate.downsample(m, util)
 
    return change_rate(inter, out_size)
 end
-
-local STP = require 'StackTracePlus'
 
 function reduce_rate.SSR(m, util)
    log.warn('passthrough')
@@ -977,8 +1025,12 @@ local function transform(m, util)
    output = reduce_rate(output, util)
 
    if m.kind == 'lambda' then
+      local input = get_input(output)
+
+      log.trace(inspect(input, {depth = 2}))
+
       return R.defineModule{
-         input = get_input(output),
+         input = input,
          output = output
       }
    else

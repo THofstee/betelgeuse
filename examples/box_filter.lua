@@ -7,7 +7,8 @@ local G = require 'graphview'
 local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 
 -- box filter
-local im_size = { 32, 32 }
+-- local im_size = { 32, 32 }
+local im_size = { 1920, 1080 }
 local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 -- local pad = L.pad(8, 8, 2, 1)(I)
 local pad = L.pad(0, 0, 0, 0)(I)
@@ -42,6 +43,7 @@ R.harness{
    backend = 'verilog',
    fn = res,
    inFile = "impulse_32.raw", inSize = in_size,
+   inFile = "1080p.raw", inSize = in_size,
    outFile = fname, outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }

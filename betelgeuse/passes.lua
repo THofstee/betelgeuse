@@ -350,6 +350,8 @@ local function peephole(m)
          return R.concat(inputs)
       elseif cur.kind == 'input' then
          return cur
+      elseif cur.kind == 'applyMethod' then
+         return cur
       else
          assert(false, 'not implemented: ' .. cur.kind)
       end
@@ -378,6 +380,8 @@ local function peephole(m)
       elseif cur.kind == 'concat' then
          return R.concat(inputs)
       elseif cur.kind == 'input' then
+         return cur
+      elseif cur.kind == 'applyMethod' then
          return cur
       else
          assert(false, 'not implemented: ' .. cur.kind)
@@ -428,6 +432,24 @@ local function peephole(m)
                   return inputs[1]
                end
             end
+         elseif temp_cur.kind == 'map' then
+            -- -- inline maps over 1 element
+            -- if temp_cur.H == 1 and temp_cur.W == 1 then
+            --    local inter = R.connect{
+            --       input = inputs[1],
+            --       toModule = R.HS(temp_cur.fn)
+            --    }
+
+            --    return R.connect{
+            --       input = inter,
+            --       toModule = R.HS(
+            --          C.cast(
+            --             inter.type.params.A,
+            --             temp_cur.outputType
+            --          )
+            --       )
+            --    }
+            -- end
          end
 
          return R.connect{
@@ -437,6 +459,8 @@ local function peephole(m)
       elseif cur.kind == 'concat' then
          return R.concat(inputs)
       elseif cur.kind == 'input' then
+         return cur
+      elseif cur.kind == 'applyMethod' then
          return cur
       else
          assert(false, 'not implemented: ' .. cur.kind)

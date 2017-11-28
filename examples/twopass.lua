@@ -7,7 +7,8 @@ local G = require 'graphview'
 local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 
 -- two pass
-local im_size = { 32, 32 }
+-- local im_size = { 32, 32 }
+local im_size = { 1920, 1080 }
 
 -- local blury = L.const(L.array2d(L.fixed(9, 0), 1, 3), {
 --                       { 1 },
@@ -76,7 +77,8 @@ local fname = arg[0]:match("([^/]+).lua")
 R.harness{
    backend = 'verilog',
    fn = res,
-   inFile = "box_32.raw", inSize = in_size,
+   -- inFile = "box_32.raw", inSize = in_size,
+   inFile = "1080p.raw", inSize = in_size,
    outFile = fname, outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
 }

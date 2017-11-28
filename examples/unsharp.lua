@@ -7,7 +7,8 @@ local G = require 'graphview'
 local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
 
 -- unsharp mask
-local im_size = { 32, 32 }
+-- local im_size = { 32, 32 }
+local im_size = { 1920, 1080 }
 
 local function conv()
    local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
@@ -64,7 +65,8 @@ end
 local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 local blurred = conv()(I)
 local scaled = scale()(blurred)
-local sharp = diff(I, scaled)
+local buffered = L.buffer(16)(I)
+local sharp = diff(buffered, scaled)
 local mod = L.lambda(sharp, I)
 
 G(mod)
@@ -89,7 +91,8 @@ local fname = arg[0]:match("([^/]+).lua")
 R.harness{
    backend = 'verilog',
    fn = res,
-   inFile = "box_32.raw", inSize = in_size,
+   -- inFile = "box_32.raw", inSize = in_size,
+   inFile = "1080p.raw", inSize = in_size,
    outFile = fname, outSize = out_size,
    earlyOverride = 300000, -- downsample is variable latency, overestimate cycles
 }

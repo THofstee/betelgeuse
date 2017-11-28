@@ -286,7 +286,6 @@ end
 translate.shift = memoize(translate.shift)
 
 function translate.trunc(m)
-   log.trace(translate(m.in_type), translate(m.out_type))
    return C.cast(
       translate(m.in_type),
       translate(m.out_type)
@@ -370,6 +369,22 @@ function translate.stencil(m)
 end
 translate.stencil = memoize(translate.stencil)
 
+function translate.buffer(m)
+   return R.buffer{
+      type = translate(m.in_type),
+      depth = m.size,
+   }
+end
+translate.buffer = memoize(translate.buffer)
+
+function translate.lambda(l)
+   return R.defineModule{
+      input = translate(l.x),
+      output = translate(l.f),
+   }
+end
+translate.lambda = memoize(translate.lambda)
+
 function translate.apply(a)
    -- propagate input/output type back to the module
    a.m.type = a.type -- @todo: remove
@@ -395,6 +410,8 @@ function translate.apply(a)
    end
 
    if v.type ~= m.inputType then
+      print(v.type)
+      print(m.inputType)
       v = R.connect{
          input = v,
          toModule = cast(v.type, m.inputType)
@@ -430,14 +447,6 @@ function translate.apply(a)
    end
 end
 translate.apply = memoize(translate.apply)
-
-function translate.lambda(l)
-   return R.defineModule{
-      input = translate(l.x),
-      output = translate(l.f)
-   }
-end
-translate.lambda = memoize(translate.lambda)
 
 function translate.map(m)
    local size = { m.type.w, m.type.h }
