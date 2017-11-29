@@ -9,7 +9,7 @@ G.render = false
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'axi'
+local mode = 'terra'
 local clean_after_test = false
 
 local lfs = require 'lfs'
@@ -18,13 +18,13 @@ lfs.chdir('examples')
 -- os.execute('make clean')
 
 local examples = {
-   'updown',     -- upsample -> downsample
-   'box_filter', -- like a convolution but no weights
-   'conv2',      -- convolution
+   -- 'updown',     -- upsample -> downsample
+   -- 'box_filter', -- like a convolution but no weights
+   -- 'conv2',      -- convolution
    -- 'strided',    -- strided convolution
-   'twopass',    -- separable convolution
+   -- 'twopass',    -- separable convolution
    'unsharp',    -- unsharp mask
-   'harris',     -- harris corner detection
+   -- 'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
    -- 'flow',       -- lucas-kanade optical flow
@@ -75,9 +75,9 @@ for _,example in ipairs(examples) do
    local rates = {
       -- { 1, 32 },
       { 1, 16 },
-      -- { 1,  8 },
-      -- { 1,  4 },
-      -- { 1,  2 },
+      { 1,  8 },
+      { 1,  4 },
+      { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
@@ -116,20 +116,33 @@ for _,example in ipairs(examples) do
          fn = res,
          inFile = in_image, inSize = in_size,
          outFile = filename, outSize = out_size,
-         earlyOverride = 48000,
-      }
-
-      R.harness{
-         backend = mode,
-         fn = res,
-         inFile = in_image, inSize = in_size,
-         outFile = filename, outSize = out_size,
          earlyOverride = 48000000,
       }
 
+
+      if mode ~= 'terra' then
+         R.harness{
+            backend = mode,
+            fn = res,
+            inFile = in_image, inSize = in_size,
+            outFile = filename, outSize = out_size,
+            earlyOverride = 48000000,
+         }
+      end
+
       local gold_file = tostring(in_size[2]) .. '-' .. example .. '.bmp'
 
-      if mode == 'verilator' then
+      if mode == 'terra' then
+         local res = {}
+
+         local f = assert(io.popen('make out/' .. filename .. '.terra.bmp'))
+         local s = assert(f:read('*a'))
+         f:close()
+
+         res.correct = os.execute('diff gold/' .. gold_file .. ' out/' .. filename .. '.terra.bmp') == 0
+
+         results[example][rate] = res
+      elseif mode == 'verilator' then
          local res = {}
 
          local f = assert(io.popen('make out/' .. filename .. '.verilator.bmp'))
@@ -144,27 +157,26 @@ for _,example in ipairs(examples) do
       elseif mode == 'axi' then
          local res = {}
 
-         local f = assert(io.popen('make out/' .. filename .. '.axi.bmp'))     -- old makefile
-         -- local f = assert(io.popen('make out/' .. filename .. 'zynq20ise.bit'))
+         local f = assert(io.popen('make out/' .. filename .. '.zynq20ise.bmp'))
          local s = assert(f:read('*a'))
          f:close()
 
          -- get area
-         local f = io.open('out/build_' .. filename .. '/OUT_par.txt')
+         local f = io.open('out/' .. filename .. '_zynq20ise/OUT_par.txt')
          local s = f:read('*a')
          f:close()
 
          res.area = string.match(s, "Number of Slices.-(%d+).-\n")
 
          -- get cycles
-         local f = io.open('out/' .. filename .. '.axi.cycles.txt')
+         local f = io.open('out/' .. filename .. '.zynq20ise.cycles.txt')
          local s = f:read('*a')
          f:close()
 
          res.cycles = string.match(s, "(%d+)")
 
          -- check for correctness
-         res.correct = os.execute('diff gold/' .. gold_file .. ' out/' .. filename .. '.axi.bmp') == 0
+         res.correct = os.execute('diff gold/' .. gold_file .. ' out/' .. filename .. '.zynq20ise.bmp') == 0
 
          results[example][rate] = res
       else

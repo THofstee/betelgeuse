@@ -65,7 +65,7 @@ end
 local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 local blurred = conv()(I)
 local scaled = scale()(blurred)
-local buffered = L.buffer(16)(I)
+local buffered = L.buffer(1024)(I)
 local sharp = diff(buffered, scaled)
 local mod = L.lambda(sharp, I)
 
