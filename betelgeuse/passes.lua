@@ -196,7 +196,6 @@ local function inline_hs(m, input)
          if cur.kind == 'input' then
             return input
          elseif cur.kind == 'apply' then
-            print(inspect(cur.fn, {depth = 2}))
             return R.connect{
                input = inputs[1],
                toModule = R.HS(cur.fn)
@@ -496,7 +495,6 @@ end
 P.peephole = peephole
 
 local function make_mem_happy(m)
-   print(inspect(m, {depth = 2}))
    local input = R.input(R.HS(R.array2d(rtypes.uint(8), m.inputType.params.A.size[1], m.inputType.params.A.size[2])))
 
    local cast = R.connect{

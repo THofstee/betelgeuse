@@ -112,6 +112,14 @@ for _,example in ipairs(examples) do
       end
 
       R.harness{
+         backend = 'metadata',
+         fn = res,
+         inFile = in_image, inSize = in_size,
+         outFile = filename, outSize = out_size,
+         earlyOverride = 48000,
+      }
+
+      R.harness{
          backend = mode,
          fn = res,
          inFile = in_image, inSize = in_size,

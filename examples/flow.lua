@@ -118,7 +118,6 @@ local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
 local fname = arg[0]:match("([^/]+).lua")
 
 R.harness{
-   backend = 'verilog',
    fn = res,
    inFile = "1080p.raw", inSize = in_size,
    outFile = fname, outSize = out_size,
