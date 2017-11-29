@@ -41,7 +41,7 @@ local fname = arg[0]:match("([^/]+).lua")
 
 R.harness{
    fn = res,
-   inFile = "impulse_32.raw", inSize = in_size,
+   -- inFile = "impulse_32.raw", inSize = in_size,
    inFile = "1080p.raw", inSize = in_size,
    outFile = fname, outSize = out_size,
    earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
