@@ -410,8 +410,6 @@ function translate.apply(a)
    end
 
    if v.type ~= m.inputType then
-      print(v.type)
-      print(m.inputType)
       v = R.connect{
          input = v,
          toModule = cast(v.type, m.inputType)
