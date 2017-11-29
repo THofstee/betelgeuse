@@ -9,7 +9,7 @@ G.render = false
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'verilator'
+local mode = 'axi'
 local clean_after_test = false
 
 local lfs = require 'lfs'
@@ -124,8 +124,10 @@ for _,example in ipairs(examples) do
          fn = res,
          inFile = in_image, inSize = in_size,
          outFile = filename, outSize = out_size,
-         earlyOverride = 48000,
+         earlyOverride = 48000000,
       }
+
+      local gold_file = tostring(in_size[2]) .. '-' .. example .. '.bmp'
 
       if mode == 'verilator' then
          local res = {}
@@ -136,7 +138,7 @@ for _,example in ipairs(examples) do
 
          res.cycles = tonumber(string.match(s, 'Cycles: (%d+)'))
 
-         res.correct = os.execute('diff gold/' .. example .. '.bmp out/' .. filename .. '.verilator.bmp') == 0
+         res.correct = os.execute('diff gold/' .. gold_file .. ' out/' .. filename .. '.verilator.bmp') == 0
 
          results[example][rate] = res
       elseif mode == 'axi' then
@@ -162,7 +164,7 @@ for _,example in ipairs(examples) do
          res.cycles = string.match(s, "(%d+)")
 
          -- check for correctness
-         res.correct = os.execute('diff gold/' .. example .. '.bmp out/' .. filename .. '.axi.bmp') == 0
+         res.correct = os.execute('diff gold/' .. gold_file .. ' out/' .. filename .. '.axi.bmp') == 0
 
          results[example][rate] = res
       else
