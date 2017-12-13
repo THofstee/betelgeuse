@@ -9,6 +9,7 @@ local function serialize(results)
             rate = rate,
             cycles = perf.cycles or 0,
             area = perf.area or 0,
+            rams = perf.rams or 0,
             correct = perf.correct,
          }
          n = n+1
@@ -36,8 +37,9 @@ local function serialize(results)
          i = i+1
          t2[i] = { 
             example = v.example, 
-            base_cycles = 0, 
+            base_cycles = 0,
             base_area = 0,
+            base_rams = 0,
             tests = {},
          }
       end
@@ -45,6 +47,7 @@ local function serialize(results)
       if v.rate[1] * v.rate[2] == 1 then
          t2[i].base_cycles = v.cycles
          t2[i].base_area = v.area
+         t2[i].base_rams = v.rams
       end
       table.insert(t2[i].tests, v)
    end
@@ -54,9 +57,11 @@ local function serialize(results)
    s = s .. 'examples' .. ','
    s = s .. 'rate' .. ','
    s = s .. 'cycles' .. ','
-   s = s .. 'perf relative 1/1' .. ','
+   s = s .. 'cycles relative 1/1' .. ','
    s = s .. 'area' .. ','
    s = s .. 'area relative 1/1' .. ','
+   s = s .. 'rams' .. ','
+   s = s .. 'rams relative 1/1' .. ','
    s = s .. 'correct' .. '\n'
 
    for _,example in ipairs(t2) do
@@ -67,6 +72,8 @@ local function serialize(results)
          s = s .. string.format("%.2f", test.cycles/example.base_cycles) .. ','
          s = s .. test.area .. ','
          s = s .. string.format("%.2f", test.area/example.base_area) .. ','
+         s = s .. test.rams .. ','
+         s = s .. string.format("%.2f", test.rams/example.base_rams) .. ','
          s = s .. tostring(test.correct or false) .. '\n'
       end
       s = s .. '\n'

@@ -20,10 +20,10 @@ lfs.chdir('examples')
 local examples = {
    -- 'updown',     -- upsample -> downsample
    -- 'box_filter', -- like a convolution but no weights
-   -- 'conv2',      -- convolution
+   'conv2',      -- convolution
    -- 'strided',    -- strided convolution
    -- 'twopass',    -- separable convolution
-   'unsharp',    -- unsharp mask
+   -- 'unsharp',    -- unsharp mask
    -- 'harris',     -- harris corner detection
    --NYI 'depth',      -- depth from stereo
    --NYI 'histogram',  -- histogram
@@ -76,8 +76,8 @@ for _,example in ipairs(examples) do
       -- { 1, 32 },
       { 1, 16 },
       { 1,  8 },
-      { 1,  4 },
-      { 1,  2 },
+      -- { 1,  4 },
+      -- { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
@@ -166,6 +166,7 @@ for _,example in ipairs(examples) do
          local s = f:read('*a')
          f:close()
 
+         res.rams = string.match(s, "Number of RAMB18E1s.-(%d+).-\n")
          res.area = string.match(s, "Number of Slices.-(%d+).-\n")
 
          -- get cycles
