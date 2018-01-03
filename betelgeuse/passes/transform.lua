@@ -628,27 +628,42 @@ function reduce_rate.upsample(m, util)
 
    local in_rate = change_rate(input, { par_in, 1 })
 
+   local inter
    if par_in ~= par_out then
       log.warn('@todo: this probably is not implemented correctly.')
-      m = R.HS(C.broadcast(m.type, par_out, 1))
-   --    -- m = R.modules.upsample{
-   --    --    type = m.type,
-   --    --    size = { 1, 1 },
-   --    --    scale = { m.scaleX, m.scaleY },
-   --    -- }
+      inter = R.connect{
+         input = in_rate,
+         toModule = R.HS(
+            C.broadcast(in_rate.type.params.A, par_out, 1)
+         )
+      }
+
+      local final_size = math.ceil(out_size[1]*out_size[2] * util[1]/util[2])
+      inter = R.connect{
+         input = inter,
+         toModule = R.HS(
+            C.cast(
+               inter.type.params.A,
+               R.array2d(m.type, final_size, 1)
+            )
+         )
+      }
+      -- m = R.modules.upsample{
+      --    type = m.type,
+      --    size = { 1, 1 },
+      --    scale = { m.scaleX, m.scaleY },
+      -- }
    else
-      m = R.modules.upsampleSeq{
-         type = m.type,
-         V = par_in,
-         size = { m.width, m.height },
-         scale = { m.scaleX, m.scaleY }
+      inter = R.connect{
+         input = in_rate,
+         toModule = R.modules.upsampleSeq{
+            type = m.type,
+            V = par_in,
+            size = { m.width, m.height },
+            scale = { m.scaleX, m.scaleY }
+         }
       }
    end
-
-   local inter = R.connect{
-      input = in_rate,
-      toModule = R.HS(m)
-   }
 
    return change_rate(inter, out_size)
 end
