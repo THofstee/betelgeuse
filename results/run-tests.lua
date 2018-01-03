@@ -1,15 +1,16 @@
 local inspect = require 'inspect'
 
+package.path = '../rigel/src/?.lua;' .. package.path
+
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
-local R = require 'rigelSimple'
 local G = require 'graphview'
 G.render = false
 
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'terra'
+local mode = 'verilator'
 local clean_after_test = false
 
 local lfs = require 'lfs'
@@ -74,14 +75,14 @@ for _,example in ipairs(examples) do
    -- utilization
    local rates = {
       -- { 1, 32 },
-      { 1, 16 },
-      { 1,  8 },
+      -- { 1, 16 },
+      -- { 1,  8 },
       -- { 1,  4 },
-      -- { 1,  2 },
+      { 1,  2 },
       { 1,  1 },
-      -- { 2,  1 },
-      -- { 4,  1 },
-      -- { 8,  1 },
+      { 2,  1 },
+      { 4,  1 },
+      { 8,  1 },
    }
 
 
@@ -111,6 +112,8 @@ for _,example in ipairs(examples) do
          assert(false, 'Unsupported input size')
       end
 
+      local R = require 'rigelSimple'
+
       R.harness{
          backend = 'metadata',
          fn = res,
@@ -118,7 +121,6 @@ for _,example in ipairs(examples) do
          outFile = filename, outSize = out_size,
          earlyOverride = 48000000,
       }
-
 
       if mode ~= 'terra' then
          R.harness{
@@ -129,6 +131,8 @@ for _,example in ipairs(examples) do
             earlyOverride = 48000000,
          }
       end
+
+      package.loaded['rigelSimple'] = nil
 
       local gold_file = tostring(in_size[2]) .. '-' .. example .. '.bmp'
 
