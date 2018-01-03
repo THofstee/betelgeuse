@@ -1,16 +1,15 @@
 local inspect = require 'inspect'
 
-package.path = '../rigel/src/?.lua;' .. package.path
-
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
+local R = require 'rigelSimple'
 local G = require 'graphview'
 G.render = false
 
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'verilator'
+local mode = 'axi'
 local clean_after_test = false
 
 local lfs = require 'lfs'
@@ -81,8 +80,8 @@ for _,example in ipairs(examples) do
       { 1,  2 },
       { 1,  1 },
       { 2,  1 },
-      { 4,  1 },
-      { 8,  1 },
+      -- { 4,  1 },
+      -- { 8,  1 },
    }
 
 
@@ -112,8 +111,6 @@ for _,example in ipairs(examples) do
          assert(false, 'Unsupported input size')
       end
 
-      local R = require 'rigelSimple'
-
       R.harness{
          backend = 'metadata',
          fn = res,
@@ -123,16 +120,19 @@ for _,example in ipairs(examples) do
       }
 
       if mode ~= 'terra' then
+         local backend = mode
+         if mode == 'axi' then
+            backend = 'verilator'
+         end
+
          R.harness{
-            backend = mode,
+            backend = backend,
             fn = res,
             inFile = in_image, inSize = in_size,
             outFile = filename, outSize = out_size,
             earlyOverride = 48000000,
          }
       end
-
-      package.loaded['rigelSimple'] = nil
 
       local gold_file = tostring(in_size[2]) .. '-' .. example .. '.bmp'
 
@@ -161,27 +161,28 @@ for _,example in ipairs(examples) do
       elseif mode == 'axi' then
          local res = {}
 
-         local f = assert(io.popen('make out/' .. filename .. '.zynq20ise.bmp'))
+         local f = assert(io.popen('make out/' .. filename .. '.zynq20vivado.bmp'))
          local s = assert(f:read('*a'))
          f:close()
 
          -- get area
-         local f = io.open('out/' .. filename .. '_zynq20ise/OUT_par.txt')
+         -- @todo: use utilization_h.txt instead and do more advanced parsiing for better area estimates
+         local f = io.open('out/' .. filename .. '_zynq20vivado/utilization.txt')
          local s = f:read('*a')
          f:close()
 
-         res.rams = string.match(s, "Number of RAMB18E1s.-(%d+).-\n")
-         res.area = string.match(s, "Number of Slices.-(%d+).-\n")
+         res.rams = string.match(s, "Block RAM Tile.-(%d+).-\n")
+         res.area = string.match(s, "%| Slice.-(%d+).-\n")
 
          -- get cycles
-         local f = io.open('out/' .. filename .. '.zynq20ise.cycles.txt')
+         local f = io.open('out/' .. filename .. '.zynq20vivado.cycles.txt')
          local s = f:read('*a')
          f:close()
 
          res.cycles = string.match(s, "(%d+)")
 
          -- check for correctness
-         res.correct = os.execute('diff gold/' .. gold_file .. ' out/' .. filename .. '.zynq20ise.bmp') == 0
+         res.correct = os.execute('diff gold/' .. gold_file .. ' out/' .. filename .. '.zynq20vivado.bmp') == 0
 
          results[example][rate] = res
       else
