@@ -179,3 +179,5 @@ local function graph_view(l)
       dot:render('dbg/graph.dot')
    end
 end
+
+return graph_view
