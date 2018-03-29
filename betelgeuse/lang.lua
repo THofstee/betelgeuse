@@ -18,7 +18,8 @@ Value = input(Type t)
       | const(Type t, any v)
 #      | placeholder(Type t)
       | concat(Value* vs) # @todo: it might be nice if i can index this with [n]
-      | index(Value v, number n) # @todo: should this be a Module or a Value?
+      | select(Value v, number n) # @todo: should this be a Module or a Value?
+# @todo: add a metamethod on the above to _index so tuple[n] overrides to select(tuple, n)
       | apply(Module m, Value v)
       attributes(Type type)
 
@@ -457,8 +458,8 @@ function L.concat(...)
    return T.concat(List{...}, L.tuple(t))
 end
 
-function L.index(v, n)
-   return T.index(v, n, v.t.ts[n])
+function L.select(v, n)
+   return T.select(v, n, v.t.ts[n])
 end
 
 --- Returns a compile-time constant.

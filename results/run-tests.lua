@@ -9,7 +9,7 @@ G.render = false
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'axi'
+local mode = 'verilator'
 local clean_after_test = false
 
 local lfs = require 'lfs'
@@ -18,9 +18,9 @@ lfs.chdir('examples')
 -- os.execute('make clean')
 
 local examples = {
-   -- 'updown',     -- upsample -> downsample
+   'updown',     -- upsample -> downsample
    -- 'box_filter', -- like a convolution but no weights
-   'conv2',      -- convolution
+   -- 'conv2',      -- convolution
    -- 'strided',    -- strided convolution
    -- 'twopass',    -- separable convolution
    -- 'unsharp',    -- unsharp mask

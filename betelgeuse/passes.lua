@@ -29,6 +29,11 @@ local P = {}
 P.transform = require 'betelgeuse.passes.transform'
 P.translate = require 'betelgeuse.passes.translate'
 P.to_handshake = require 'betelgeuse.passes.to_handshake'
+P.json = require 'betelgeuse.passes.json'
+P.fuse_reshape = require 'betelgeuse.passes.fuse_reshape'
+P.fuse_map = require 'betelgeuse.passes.fuse_map'
+P.fuse_concat = require 'betelgeuse.passes.fuse_concat'
+P.rigel = require 'betelgeuse.passes.rigel'
 
 local _VERBOSE = false
 

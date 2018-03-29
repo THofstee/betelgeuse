@@ -1,8 +1,7 @@
-local R = require 'rigelSimple'
-local C = require 'examplescommon'
-local rtypes = require 'types'
 local memoize = require 'memoize'
 local L = require 'betelgeuse.lang'
+local I = require 'betelgeuse.ir'
+local inline = require 'betelgeuse.passes.inline'
 
 local log = require 'log'
 local inspect = require 'inspect'
@@ -25,14 +24,13 @@ end
 translate.wrapped = memoize(translate.wrapped)
 
 function translate.array2d(t)
-   return R.array2d(translate(t.t), t.w, t.h)
+   return I.array2d(translate(t.t), t.w, t.h)
 end
 translate.array2d = memoize(translate.array2d)
 
 function translate.fixed(t)
    local n = t.i + t.f
-   n = math.ceil(n/8)*8
-   return rtypes.int(n)
+   return I.bit(n)
 end
 translate.fixed = memoize(translate.fixed)
 
@@ -42,41 +40,31 @@ function translate.tuple(t)
       translated[i] = translate(typ)
    end
 
-   return R.tuple(translated)
+   return I.tuple(unpack(translated))
 end
 translate.tuple = memoize(translate.tuple)
 
 -- @todo: consider wrapping singletons in T[1,1]
 function translate.input(i)
-   return R.input(translate(i.type))
+   return I.input(translate(i.type))
 end
 translate.input = memoize(translate.input)
 
 -- @todo: consider wrapping singletons in T[1,1]
 function translate.const(c)
-   -- Flatten an n*m table into a 1*(n*m) table
-   local function flatten_mat(m)
-      if type(m) == 'number' then
-         return m
-      end
-
-      local idx = 0
-      local res = {}
-
-      for h,row in ipairs(m) do
-         for w,elem in ipairs(row) do
-            idx = idx + 1
-            res[idx] = elem
+   local function convert(v)
+      if type(v) == 'table' then
+         for i,val in ipairs(v) do
+            v[i] = convert(val)
          end
+         return v
+      else
+         -- shift constant left by fractional bits
+         return v * 2^c.type.f
       end
-
-      return res
    end
 
-   return R.constant{
-      type = translate(c.type),
-      value = flatten_mat(c.v)
-   }
+   return I.const(translate(c.type), convert(c.v))
 end
 translate.const = memoize(translate.const)
 
@@ -94,17 +82,17 @@ function translate.concat(c)
    for i,v in ipairs(c.vs) do
       translated[i] = translate(v)
    end
-   return R.concat(translated)
+   return I.concat(unpack(translated))
 end
 translate.concat = memoize(translate.concat)
 
-function translate.index(a)
+function translate.select(a)
    return R.index{
       input = translate(a.v),
       key = a.n-1
    }
 end
-translate.index = memoize(translate.index)
+translate.select = memoize(translate.select)
 
 function translate.add(m)
    -- figure out what width the inputs need to be
@@ -118,56 +106,27 @@ function translate.add(m)
    local out_type = m.out_type
 
    -- we need to do a bit of processing on the input
-   local input = R.input(translate(m.in_type))
+   local input = I.input(translate(m.in_type))
 
    -- split up the input tuple
-   local in1 = R.index{
-      input = input,
-      key = 0
-   }
-
-   local in2 = R.index{
-      input = input,
-      key = 1
-   }
+   local in1 = I.select(input, 1)
+   local in2 = I.select(input, 2)
 
    -- align the decimal point and cast to the right size
-   local in1_shift = R.connect{
-      input = in1,
-      toModule = R.modules.shiftAndCast{
-         inType = in1.type,
-         outType = translate(in_type),
-         shift = -(frac_bits - m.in_type.ts[1].f)
-      }
-   }
+   local in1_shift = I.apply(I.shift(-(frac_bits - m.in_type.ts[1].f)), in1)
+   local in1_trunc = I.apply(I.trunc(in_width), in1_shift)
 
-   local in2_shift = R.connect{
-      input = in2,
-      toModule = R.modules.shiftAndCast{
-         inType = in2.type,
-         outType = translate(in_type),
-         shift = -(frac_bits - m.in_type.ts[2].f)
-      }
-   }
+   local in2_shift = I.apply(I.shift(-(frac_bits - m.in_type.ts[2].f)), in2)
+   local in2_trunc = I.apply(I.trunc(in_width), in2_shift)
 
    -- concatenate aligned inputs
-   local concat = R.concat{in1_shift, in2_shift}
+   local concat = I.concat(in1_trunc, in2_trunc)
 
    -- now we can just sum like an integer
-   local output = R.connect{
-      input = concat,
-      toModule = R.modules.sum{
-         inType = translate(in_type),
-         outType = translate(out_type),
-         async = true
-      }
-   }
+   local output = I.apply(I.add(), concat)
 
    -- return this new module
-   return R.defineModule{
-      input = input,
-      output = output
-   }
+   return I.lambda(output, input)
 end
 translate.add = memoize(translate.add)
 
@@ -335,20 +294,12 @@ end
 translate.crop = memoize(translate.crop)
 
 function translate.upsample(m)
-   return R.modules.upsample{
-      type = translate(m.in_type.t),
-      size = { m.in_type.w, m.in_type.h },
-      scale = { m.x, m.y }
-   }
+   return I.upsample_x(m.x, m.y, m.in_type.w, m.in_type.h)
 end
 translate.upsample = memoize(translate.upsample)
 
 function translate.downsample(m)
-   return R.modules.downsample{
-      type = translate(m.in_type.t),
-      size = { m.in_type.w, m.in_type.h },
-      scale = { m.x, m.y }
-   }
+   return I.downsample_x(m.x, m.y, m.in_type.w, m.in_type.h)
 end
 translate.downsample = memoize(translate.downsample)
 
@@ -378,10 +329,7 @@ end
 translate.buffer = memoize(translate.buffer)
 
 function translate.lambda(l)
-   return R.defineModule{
-      input = translate(l.x),
-      output = translate(l.f),
-   }
+   return I.lambda(translate(l.f), translate(l.x))
 end
 translate.lambda = memoize(translate.lambda)
 
@@ -394,54 +342,10 @@ function translate.apply(a)
    local m = translate(a.m)
    local v = translate(a.v)
 
-   local function cast(src, dst)
-      -- log.trace(a.m.in_type, a.v.type)
-      if src.kind ~= 'array' then
-         return C.cast(
-               src,
-               dst
-            )
-      end
-
-      return R.modules.map{
-         fn = cast(src.over, dst.over),
-         size = src.size
-      }
-   end
-
-   if v.type ~= m.inputType then
-      v = R.connect{
-         input = v,
-         toModule = cast(v.type, m.inputType)
-      }
-   end
-
    if m.kind == 'lambda' then
-      local function inline(m, input)
-         return m.output:visitEach(function(cur, inputs)
-               if cur.kind == 'input' then
-                  return input
-               elseif cur.kind == 'apply' then
-                  return R.connect{
-                     input = inputs[1],
-                     toModule = cur.fn
-                  }
-               elseif cur.kind == 'concat' then
-                  return R.concat(inputs)
-               elseif cur.kind == 'constant' then
-                  return cur
-               else
-                  assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
-               end
-         end)
-      end
-
       return inline(m, v)
    else
-      return R.connect{
-         input = v,
-         toModule = m
-      }
+      return I.apply(m, v)
    end
 end
 translate.apply = memoize(translate.apply)
@@ -454,10 +358,7 @@ function translate.map(m)
    m.m.out_type = m.out_type.t
    m.m.in_type = m.in_type.t
 
-   return R.modules.map{
-      fn = translate(m.m),
-      size = size
-   }
+   return I.map_x(translate(m.m), size)
 end
 translate.map = memoize(translate.map)
 
