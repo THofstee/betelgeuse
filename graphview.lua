@@ -1,16 +1,19 @@
 local Graphviz = require 'graphviz'
-local memoize = require 'memoize'
+
+local bg = require 'graphview.betelgeuse'
+local ri = require 'graphview.rigel'
+local ir = require 'graphview.ir'
 
 local G = {}
 G.render = true
 
 local function graph_view(g)
    if g.kind == 'wrapped' then
-      require'graphview.betelgeuse'(g)
+      bg(g)
    elseif g.tag == 'rigel' then
-      require'graphview.rigel'(g)
+      ri(g)
    else
-      require'graphview.ir'(g)
+      ir(g)
    end
 end
 

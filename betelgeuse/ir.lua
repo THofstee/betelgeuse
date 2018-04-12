@@ -236,7 +236,13 @@ function IR.map_t(f, n)
 end
 
 function IR.reduce_x(f, n)
-   return C.reduce_x(f, n)
+   local function type_func(t)
+      -- @todo: is this right?
+      -- @todo: i think the type already got expanded further up...
+      return t.t
+   end
+
+   return C.reduce_x(f, n, type_func)
 end
 
 function IR.reduce_t(f, n)
@@ -244,15 +250,27 @@ function IR.reduce_t(f, n)
 end
 
 function IR.stencil_x(x0, y0, x1, y1)
-   return C.stencil_x(x0, y0, x1, y1)
+   local function type_func(t)
+      return IR.array2d(IR.array2d(t.t, x1, y1), t.w, t.h)
+   end
+
+   return C.stencil_x(x0, y0, x1, y1, type_func)
 end
 
-function IR.pad_t(l, r, t, b)
-   return C.pad_t(l, r, t, b)
+function IR.pad_t(l, r, u, d)
+   local function type_func(t)
+      return IR.array2d(t.t, t.w+l+r, t.h+u+d)
+   end
+
+   return C.pad_t(l, r, u, d, type_func)
 end
 
-function IR.crop_t(l, r, t, b)
-   return C.crop_t(l, r, t, b)
+function IR.crop_t(l, r, u, d)
+   local function type_func(t)
+      return IR.array2d(t.t, t.w-l-r, t.h-u-d)
+   end
+
+   return C.crop_t(l, r, u, d, type_func)
 end
 
 function IR.upsample_x(x, y)
@@ -263,8 +281,16 @@ function IR.upsample_x(x, y)
    return C.upsample_x(x, y, type_func)
 end
 
+-- @todo: cyc should maybe be number of elements taken per cycle instead of number of cycles per element...?
+-- @todo: it can't be number of elements per cycle because if we go from
+--        [1,1] -> [2,1] for a 2x2 upsample, that's going to have same number
+--        of elemenets per cycle as a thing going from [1,1] -> [2,2]
 function IR.upsample_t(x, y, cyc)
-   return C.upsample_t(x, y, cyc)
+   local function type_func(t)
+      return IR.array2d(t.t, t.w*x, t.h*y)
+   end
+
+   return C.upsample_t(x, y, cyc, type_func)
 end
 
 function IR.downsample_x(x, y)
@@ -276,7 +302,11 @@ function IR.downsample_x(x, y)
 end
 
 function IR.downsample_t(x, y, cyc)
-   return C.downsample_t(x, y, cyc)
+   local function type_func(t)
+      return IR.array2d(t.t, t.w/x, t.h/y)
+   end
+
+   return C.downsample_t(x, y, cyc, type_func)
 end
 
 function IR.repeat_x(w, h)

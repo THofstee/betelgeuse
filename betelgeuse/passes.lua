@@ -35,6 +35,19 @@ P.fuse_map = require 'betelgeuse.passes.fuse_map'
 P.fuse_concat = require 'betelgeuse.passes.fuse_concat'
 P.rigel = require 'betelgeuse.passes.rigel'
 
+function P.opt(mod, rate)
+   local util = P.reduction_factor(mod, rate)
+
+   local res
+   res = P.translate(mod)
+   res = P.transform(res, util)
+   res = P.fuse_reshape(res)
+   res = P.fuse_map(res)
+   res = P.fuse_concat(res)
+
+   return res
+end
+
 local _VERBOSE = false
 
 local function is_handshake(t)
@@ -526,9 +539,11 @@ local function make_mem_happy(m)
          R.modules.map{
             fn = C.cast(
                m.outputType.params.A.over,
+               -- m.outputType.params.A,
                rtypes.uint(8)
             ),
-            size = m.outputType.params.A.size
+            -- size = m.outputType.params.A.size
+            size = { 1, 1 }
          }
       )
    }

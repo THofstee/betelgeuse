@@ -1,6 +1,5 @@
 local Graphviz = require 'graphviz'
 local memoize = require 'memoize'
-local G = require 'graphview'
 
 local function str(s)
    return "\"" .. tostring(s) .. "\""
@@ -175,7 +174,7 @@ local function graph_view(l)
    a(l)
 
    dot:write('dbg/graph.dot')
-   if G.render then
+   if (require'graphview').render then
       dot:render('dbg/graph.dot')
    end
 end

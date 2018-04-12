@@ -10,29 +10,26 @@ local _VERBOSE = false
 
 local translate = {}
 local translate_mt = {
-   __call = function(t, m)
-      if _VERBOSE then log.trace("translate." .. m.kind) end
-      assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
-      return t[m.kind](m)
-   end
+   __call = memoize(function(t, m)
+         if _VERBOSE then log.trace("translate." .. m.kind) end
+         assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
+         return t[m.kind](m)
+   end)
 }
 setmetatable(translate, translate_mt)
 
 function translate.wrapped(w)
    return translate(L.unwrap(w))
 end
-translate.wrapped = memoize(translate.wrapped)
 
 function translate.array2d(t)
    return I.array2d(translate(t.t), t.w, t.h)
 end
-translate.array2d = memoize(translate.array2d)
 
 function translate.fixed(t)
    local n = t.i + t.f
    return I.bit(n)
 end
-translate.fixed = memoize(translate.fixed)
 
 function translate.tuple(t)
    local translated = {}
@@ -42,13 +39,11 @@ function translate.tuple(t)
 
    return I.tuple(unpack(translated))
 end
-translate.tuple = memoize(translate.tuple)
 
 -- @todo: consider wrapping singletons in T[1,1]
 function translate.input(i)
    return I.input(translate(i.type))
 end
-translate.input = memoize(translate.input)
 
 -- @todo: consider wrapping singletons in T[1,1]
 function translate.const(c)
@@ -66,7 +61,6 @@ function translate.const(c)
 
    return I.const(translate(c.type), convert(c.v))
 end
-translate.const = memoize(translate.const)
 
 function translate.broadcast(m)
    return C.broadcast(
@@ -75,7 +69,6 @@ function translate.broadcast(m)
       m.h
    )
 end
-translate.broadcast = memoize(translate.broadcast)
 
 function translate.concat(c)
    local translated = {}
@@ -84,7 +77,6 @@ function translate.concat(c)
    end
    return I.concat(unpack(translated))
 end
-translate.concat = memoize(translate.concat)
 
 function translate.select(a)
    return R.index{
@@ -92,7 +84,6 @@ function translate.select(a)
       key = a.n-1
    }
 end
-translate.select = memoize(translate.select)
 
 function translate.add(m)
    -- figure out what width the inputs need to be
@@ -128,7 +119,6 @@ function translate.add(m)
    -- return this new module
    return I.lambda(output, input)
 end
-translate.add = memoize(translate.add)
 
 function translate.sub(m)
    -- figure out what width the inputs need to be
@@ -193,7 +183,6 @@ function translate.sub(m)
       output = output
    }
 end
-translate.sub = memoize(translate.sub)
 
 function translate.mul(m)
    -- @todo: fix for fixed point
@@ -213,7 +202,6 @@ function translate.mul(m)
       outType = translate(out_type)
    }
 end
-translate.mul = memoize(translate.mul)
 
 function translate.div(m)
    -- @todo: fix for fixed point
@@ -233,24 +221,14 @@ function translate.div(m)
       outType = translate(out_type)
    }
 end
-translate.div = memoize(translate.div)
 
 function translate.shift(m)
-   return R.modules.shiftAndCast{
-      inType = translate(m.in_type),
-      outType = translate(m.out_type),
-      shift = m.n
-   }
+   return I.shift(m.n)
 end
-translate.shift = memoize(translate.shift)
 
 function translate.trunc(m)
-   return C.cast(
-      translate(m.in_type),
-      translate(m.out_type)
-   )
+   return I.trunc(m.i + m.f)
 end
-translate.trunc = memoize(translate.trunc)
 
 function translate.reduce(m)
    -- propagate type to module applied in reduce
@@ -258,67 +236,31 @@ function translate.reduce(m)
    m.m.in_type = L.tuple(m.out_type, m.out_type)
    m.m.out_type = m.out_type
 
-   return R.modules.reduce{
-      fn = translate(m.m),
-      size = { m.in_type.w, m.in_type.h }
-   }
+   return I.reduce_x(translate(m.m), { m.in_type.w, m.in_type.h })
 end
-translate.reduce = memoize(translate.reduce)
 
 function translate.pad(m)
-   local arr_t = translate(m.type.t)
-   local w = m.type.w-m.left-m.right
-   local h = m.type.h-m.top-m.bottom
-
-   return R.modules.pad{
-      type = arr_t,
-      size = { w, h },
-      pad = { m.left, m.right, m.bottom, m.top },
-      value = 0
-   }
+   return I.pad_t(m.left, m.right, m.top, m.bottom)
 end
-translate.pad = memoize(translate.pad)
 
 function translate.crop(m)
-   local arr_t = translate(m.type.t)
-   local w = m.type.w+m.left+m.right
-   local h = m.type.h+m.top+m.bottom
-
-   return R.modules.crop{
-      type = arr_t,
-      size = { w, h },
-      crop = { m.left, m.right, m.bottom, m.top },
-      value = 0
-   }
+   return I.crop_t(m.left, m.right, m.top, m.bottom)
 end
-translate.crop = memoize(translate.crop)
 
 function translate.upsample(m)
    return I.upsample_x(m.x, m.y, m.in_type.w, m.in_type.h)
 end
-translate.upsample = memoize(translate.upsample)
 
 function translate.downsample(m)
    return I.downsample_x(m.x, m.y, m.in_type.w, m.in_type.h)
 end
-translate.downsample = memoize(translate.downsample)
 
 function translate.stencil(m)
-   local w = m.type.w
-   local h = m.type.h
-   local in_elem_t = translate(m.type.t.t)
-
-   return  C.stencil(
-      in_elem_t,
-      w,
-      h,
-      m.offset_x,
-      m.extent_x+m.offset_x-1,
-      m.offset_y,
-      m.extent_y+m.offset_y-1
+   return I.stencil_x(
+      m.offset_x, m.offset_y, m.extent_x, m.extent_y,
+      m.type.w, m.type.h -- @todo: should this be in_type instead?
    )
 end
-translate.stencil = memoize(translate.stencil)
 
 function translate.buffer(m)
    return R.buffer{
@@ -326,12 +268,10 @@ function translate.buffer(m)
       depth = m.size,
    }
 end
-translate.buffer = memoize(translate.buffer)
 
 function translate.lambda(l)
    return I.lambda(translate(l.f), translate(l.x))
 end
-translate.lambda = memoize(translate.lambda)
 
 function translate.apply(a)
    -- propagate input/output type back to the module
@@ -348,7 +288,6 @@ function translate.apply(a)
       return I.apply(m, v)
    end
 end
-translate.apply = memoize(translate.apply)
 
 function translate.map(m)
    local size = { m.type.w, m.type.h }
@@ -360,7 +299,6 @@ function translate.map(m)
 
    return I.map_x(translate(m.m), size)
 end
-translate.map = memoize(translate.map)
 
 function translate.zip(m)
    return R.modules.SoAtoAoS{

@@ -74,6 +74,7 @@ end
 local translate = {}
 local translate_mt = {
    __call = memoize(function(translate, m, hs)
+         assert(m)
          local dispatch = m.kind
          assert(hs ~= nil, "hs was nil")
          assert(translate[dispatch], "dispatch function " .. dispatch .. " is nil")
@@ -171,14 +172,93 @@ end
 function translate.upsample_x(m, hs)
    if hs then
       -- print(inspect(m, {depth = 2}))
-      return R.HS(
-         R.modules.upsampleSeq{
-            type = translate(m.type_in.t, false),
-            V = 1, -- @todo: is this correct?
-            size = { m.type_in.w, m.type_in.h }, -- @todo: this is wrong, it needs to pass in the width and height of the full image through the IR translations
-            scale = { m.x, m.y },
-         }
-      )
+      -- local m = R.HS(
+      --    R.modules.upsampleSeq{
+      --       type = translate(m.type_in.t, false),
+      --       V = 2, -- @todo: is this correct?
+      --       size = { m.type_in.w, m.type_in.h }, -- @todo: this is wrong, it needs to pass in the width and height of the full image through the IR translations
+      --       scale = { m.x, m.y },
+      --    }
+      -- )
+
+      local input = R.input(translate(m.type_in, hs))
+
+      -- @todo: hack, this shouldn't be a broadcast if it can be avoided
+      local inter = R.connect{
+         input = input,
+         toModule = R.HS(
+            C.broadcast(
+               translate(m.type_in, false),
+               m.type_out.w / m.type_in.w,
+               m.type_out.h / m.type_in.h
+            )
+         )
+      }
+
+      local cast = R.connect{
+         input = inter,
+         toModule = R.HS(
+            C.cast(
+               inter.type.params.A,
+               R.array2d(translate(m.type_in.t, false), m.type_out.w, m.type_out.h)
+            )
+         )
+      }
+
+      -- @todo: bug here in this cast
+      print(inter.type.params.A)
+      print(R.array2d(translate(m.type_in.t, false), m.type_out.w, m.type_out.h))
+
+      return R.defineModule{
+         input = input,
+         output = cast,
+      }
+
+      -- return R.HS(
+      --    R.modules.upsampleSeq{
+      --       type = translate(m.type_in.t, false),
+      --       V = 1, -- @todo: is this correct?
+      --       size = { m.type_in.w, m.type_in.h }, -- @todo: this is wrong, it needs to pass in the width and height of the full image through the IR translations
+      --       scale = { m.x, m.y },
+      --    }
+      -- )
+   else
+      return R.modules.upsample{
+         type = translate(m.type_in.t, false),
+         size = { m.type_in.w, m.type_in.h },
+         scale = { m.x, m.y },
+      }
+   end
+end
+
+function translate.upsample_t(m, hs)
+   if hs then
+      local input = R.input(translate(m.type_in, hs))
+
+      local inter = R.connect{
+         input = input,
+         toModule = R.HS(
+            R.modules.upsampleSeq{
+               type = translate(m.type_in.t, false),
+               V = m.type_in.w*m.type_in.h, -- @todo: is this correct?
+               size = { m.type_in.w, m.type_in.h }, -- @todo: this is wrong, it needs to pass in the width and height of the full image through the IR translations
+               scale = { m.x, m.y },
+            }
+         )
+      }
+
+      local rate = R.connect{
+         input = inter,
+         toModule = change_rate(
+            inter.type.params.A,
+            { m.type_out.w, m.type_out.h }
+         )
+      }
+
+      return R.defineModule{
+         input = input,
+         output = rate
+      }
    else
       return R.modules.upsample{
          type = translate(m.type_in.t, false),
@@ -191,14 +271,32 @@ end
 function translate.downsample_x(m, hs)
    if hs then
       -- print(inspect(m, {depth = 2}))
-      return R.HS(
-         R.modules.downsampleSeq{
-            type = translate(m.type_in.t, hs),
-            V = 1, -- @todo: is this correct?
-            size = { m.type_in.w, m.type_in.h }, -- @todo: this is wrong, it needs to pass in the width and height of the full image through the IR translations
-            scale = { m.x, m.y },
-         }
-      )
+      local input = R.input(translate(m.type_in, hs))
+
+      local inter = R.connect{
+         input = input,
+         toModule = R.HS(
+            R.modules.downsampleSeq{
+               type = translate(m.type_in.t, false),
+               V = m.type_in.w*m.type_in.h, -- @todo: is this correct?
+               size = { m.type_in.w, m.type_in.h }, -- @todo: this is wrong, it needs to pass in the width and height of the full image through the IR translations
+               scale = { m.x, m.y },
+            }
+         )
+      }
+
+      local rate = R.connect{
+         input = inter,
+         toModule = change_rate(
+            inter.type.params.A,
+            { m.type_out.w, m.type_out.h }
+         )
+      }
+
+      return R.defineModule{
+         input = input,
+         output = rate,
+      }
    else
       return R.modules.downsample{
          type = translate(m.type_in.t, hs),
@@ -221,12 +319,35 @@ function translate.map_x(m, hs)
 end
 
 function translate.map_t(m, hs)
-   return translate(m.m, hs)
+   local out_size = { m.type_out.w, m.type_out.h }
+   local new_m = translate(m.m, hs)
+
+   local input = R.input(translate(m.type_in, hs))
+
+   local flatten = R.connect{
+      input = input,
+      toModule = change_rate(translate(m.type_in, false), { 1, 1 })
+   }
+
+   local inter = R.connect{
+      input = flatten,
+      toModule = new_m,
+   }
+
+   local output = R.connect{
+      input = inter,
+      toModule = change_rate(new_m.outputType.params.A, out_size),
+   }
+
+   return R.defineModule{
+      input = input,
+      output = output,
+   }
 end
 
 function translate.partition(m, hs)
    -- @todo: this is weird
-   return change_rate(translate(m.type_in, false), { 1, 1 })
+   return change_rate(translate(m.type_in, false), m.counts)
 end
 
 function translate.flatten(m, hs)
@@ -242,6 +363,8 @@ function translate.apply(x, hs)
    print('================')
    print('================')
    print(hs)
+   print(inspect(x.v, {depth = 2}))
+   print(inspect(x.m, {depth = 2}))
    print(inspect(v, {depth = 2}))
    print(inspect(m, {depth = 2}))
 
@@ -283,7 +406,7 @@ function translate.concat(x, hs)
          toModule = RM.packTuple(translated_t),
       }
    else
-      print(inspect(R.concat(translated), {depth = 2}))
+      -- print(inspect(R.concat(translated), {depth = 2}))
       return R.concat(translated)
    end
 end
@@ -303,8 +426,10 @@ end
 local function to_rigel(m)
    local in_size = { m.x.type.w, m.x.type.h }
    local out_size = {m.f.type.w, m.f.type.h }
+   local m = m.f.v.m.m or m.f.v.v.m.m
 
    local res = translate(m, true)
+   res = require"betelgeuse.passes".make_mem_happy(res)
 
    function synth(filename)
       local fname = arg[0]:match("([^/]+).lua")
@@ -331,6 +456,5 @@ if _VERBOSE then
       end
    end
 end
-
 
 return to_rigel

@@ -1,6 +1,5 @@
 local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
-local R = require 'rigelSimple'
 local G = require 'graphview'
 
 -- parse command line args
@@ -19,32 +18,44 @@ local x3 = L.map(add_c)(x2)
 local x4 = L.downsample(2, 1)(x3)
 local x5 = L.map(add_c)(x4)
 local mod = L.lambda(x5, x0)
-
 -- G(mod)
 
--- translate to rigel and optimize
-local res
-local util = P.reduction_factor(mod, rate)
-res = P.translate(mod)
-res = P.transform(res, util)
-res = P.streamify(res, rate)
-res = P.peephole(res)
+local inspect = require 'inspect'
+local DG = require 'dump.betelgeuse'
+print(DG(mod))
+assert(false)
+
+-- optimize
+local res = P.opt(mod, rate)
 G(res)
-res = P.make_mem_happy(res)
 
--- call harness
-local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
-local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
+print(inspect(res))
+assert(false)
 
-local fname = arg[0]:match("([^/]+).lua")
+-- translate to rigel and run
+local r,s = P.rigel(res)
 
-R.harness{
-   fn = res,
-   -- inFile = "box_32.raw", inSize = in_size,
-   inFile = "1080p.raw", inSize = in_size,
-   outFile = fname, outSize = out_size,
-   earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
-}
+local f = assert(io.open(string.format("dbg/%s-%s.txt", rate[1], rate[2]), "w"))
+f:write(inspect(r, {
+                   process = function(item, path)
+                      if path[#path] == 'loc' then return nil end
+                      if path[#path] == inspect.METATABLE then return nil end
+                      if path[#path] == 'sdfRate' then return nil end
+                      if path[#path] == 'globals' then return nil end
+                      if path[#path] == 'globalMetadata' then return nil end
+                      if path[#path] == 'makeSystolic' then return nil end
+                      if path[#path] == 'name' then return nil end
+                      if path[#path] == 'stateful' then return nil end
+                      if path[#path] == 'delay' then return nil end
+                      if path[#path] == 'type' then return tostring(item) end
+                      if path[#path] == 'inputType' then return tostring(item) end
+                      if path[#path] == 'outputType' then return tostring(item) end
+                      return item
+                   end
+}))
 
--- return the pre-translated module
+G(r)
+s("1080p.raw")
+
+-- return the unoptimized module
 return mod

@@ -1,6 +1,5 @@
 local Graphviz = require 'graphviz'
 local memoize = require 'memoize'
-local G = require 'graphview'
 
 local function str(s)
    return "\"" .. tostring(s) .. "\""
@@ -57,10 +56,10 @@ local function graph_view(l)
 
    local a = {}
    local a_mt = {
-      __call = function(a, node)
+      __call = memoize(function(a, node)
          assert(a[node.kind], "dispatch function a." .. node.kind .. " is nil")
          return a[node.kind](node)
-      end
+      end)
    }
    setmetatable(a, a_mt)
 
@@ -170,12 +169,11 @@ local function graph_view(l)
       -- return the input to the apply
       return ids[l.x], out
    end
-   a = memoize(a)
 
    a(l)
 
    dot:write('dbg/graph.dot')
-   if G.render then
+   if (require'graphview').render then
       dot:render('dbg/graph.dot')
    end
 end

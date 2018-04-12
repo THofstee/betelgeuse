@@ -132,12 +132,12 @@ end
 local reduce_rate = {}
 local reduce_rate_mt = {
    __call = memoize(function(reduce_rate, m, util)
-      -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
-      if util[2] <= util[1] then return m end
+         -- @todo: this should also make things spit out multiple parallel branches if trying to meet a certain utilization?
+         if util[2] <= util[1] then return m end
 
-      local dispatch = m.kind
-      assert(reduce_rate[dispatch], "dispatch function " .. dispatch .. " is nil")
-      return reduce_rate[dispatch](m, util)
+         local dispatch = m.kind
+         assert(reduce_rate[dispatch], "dispatch function " .. dispatch .. " is nil")
+         return reduce_rate[dispatch](m, util)
    end)
 }
 setmetatable(reduce_rate, reduce_rate_mt)
@@ -198,17 +198,16 @@ function reduce_rate.input(m, util)
 end
 
 function reduce_rate.concat(m, util)
-   for i,input in ipairs(m.inputs) do
-      local in_type = base(input).outputType
-      -- log.trace(inspect(in_type, {depth = 2}))
-   end
-
    local inputs = {}
-   for i,input in ipairs(m.inputs) do
+   for i,input in ipairs(m.vs) do
       inputs[i] = reduce_rate(input, util)
    end
 
-   return R.concat(inputs)
+   return IR.concat(unpack(inputs))
+end
+
+function reduce_rate.select(m, util)
+   return IR.select(reduce_rate(m.v, util), m.n)
 end
 
 -- function reduce_rate.concat(m, util)
@@ -310,33 +309,38 @@ function reduce_rate.map_x(m, util)
    if effective_rate < 1 and par ~= 1 then
       log.warn('case of par>1 not yet implemented')
    elseif effective_rate < 1 and par == 1 then
-      -- we would still like to further reduce parallelism, reduce inner module
-      local in_cast = R.connect{
-         input = in_rate,
-         toModule = R.HS(
-            C.cast(
-               R.array2d(input.type.params.A.over, par, 1),
-               input.type.params.A.over
-            )
-         )
-      }
+      print(inspect(m, {depth = 2}))
+      local newm = reduce_rate(m.m, { util[1], math.floor(util[2]/max_reduce) })
+      print(inspect(newm, {depth = 2}))
+      return IR.map_t(newm, m.size)
 
-      local inter = R.connect{
-         input = in_cast,
-         toModule = R.HS(m.fn)
-      }
+      -- -- we would still like to further reduce parallelism, reduce inner module
+      -- local in_cast = R.connect{
+      --    input = in_rate,
+      --    toModule = R.HS(
+      --       C.cast(
+      --          R.array2d(input.type.params.A.over, par, 1),
+      --          input.type.params.A.over
+      --       )
+      --    )
+      -- }
 
-      log.trace('reducing inner module of a map')
-      local m2 = reduce_rate(inter, { util[1], math.floor(util[2]/max_reduce) })
-      local out_cast = R.connect{
-         input = m2,
-         toModule = R.HS(
-            C.cast(
-               m2.type.params.A,
-               R.array2d(m2.type.params.A, par, 1)
-            )
-         )
-      }
+      -- local inter = R.connect{
+      --    input = in_cast,
+      --    toModule = R.HS(m.fn)
+      -- }
+
+      -- log.trace('reducing inner module of a map')
+      -- local m2 = reduce_rate(inter, { util[1], math.floor(util[2]/max_reduce) })
+      -- local out_cast = R.connect{
+      --    input = m2,
+      --    toModule = R.HS(
+      --       C.cast(
+      --          m2.type.params.A,
+      --          R.array2d(m2.type.params.A, par, 1)
+      --       )
+      --    )
+      -- }
    else
       if par == 1 then
          m = IR.map_t(m.m, { par, 1 })
@@ -496,6 +500,22 @@ function reduce_rate.lift(m, util)
    }
 end
 
+function reduce_rate.const(m, util)
+   return m
+end
+
+function reduce_rate.add(m, util)
+   return m
+end
+
+function reduce_rate.shift(m, util)
+   return m
+end
+
+function reduce_rate.trunc(m, util)
+   return m
+end
+
 function reduce_rate.pad(m, util)
    local input
    if DONT then
@@ -574,7 +594,9 @@ function reduce_rate.upsample_x(m, util)
    local par_in = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
 
    local out_size = { m.type_out.w, m.type_out.h }
-   local par_out = math.ceil(out_size[1]*out_size[2] * util[1]/util[2] / par_in)
+   local par_out = math.ceil(out_size[1]*out_size[2] * util[1]/util[2])
+   -- @todo: check this, should it be the above or the commented out line below?
+   -- local par_out = math.ceil(out_size[1]*out_size[2] * util[1]/util[2] / par_in)
 
    local input = IR.input(m.type_in)
    local in_rate = IR.apply(IR.partition({ par_in, 1 }), input)
@@ -586,7 +608,9 @@ function reduce_rate.upsample_x(m, util)
 
       m = IR.upsample_x(m.x, m.y)
    else
-      m = IR.upsample_t(m.x, m.y)
+      local cyc = (m.x*m.y)*(par_out/par_in)
+      log.warn(string.format('@todo: double check this, par_in = %s, par_out = %s, cyc = %s', par_in, par_out, cyc))
+      m = IR.upsample_t(m.x, m.y, cyc)
    end
    local inter = IR.apply(IR.map_t(m, { par_out, 1 }), in_rate)
 
@@ -804,11 +828,12 @@ function reduce_rate.lambda(m, util)
    -- reduction.
 
    -- @todo: what about reduce(lambda)? does this just become lambda -> reduceSeq?
-   local input = m.inputs[1] -- reduce_rate(m.inputs[1], util)
+   return IR.lambda(reduce_rate(m.f, util), m.x)
+   -- local input = m.x
 
-   local m = inline(base(m), input)
+   -- local m = inline(m.f, input)
 
-   return reduce_rate(m, util)
+   -- return reduce_rate(m, util)
 
    -- -- assert(false, "Not yet implemented")
    -- -- @todo: recurse optimization calls here?

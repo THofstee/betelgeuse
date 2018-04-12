@@ -79,23 +79,18 @@ for _,example in ipairs(examples) do
       -- { 1,  4 },
       { 1,  2 },
       { 1,  1 },
-      { 2,  1 },
+      -- { 2,  1 },
       -- { 4,  1 },
       -- { 8,  1 },
    }
-
 
    for i,rate in ipairs(rates) do
       if clean_after_test then os.execute('make clean') end
 
       print(example, inspect(rate))
 
-      local util = P.reduction_factor(mod, rate)
-      local res = P.translate(mod)
-      res = P.transform(res, util)
-      res = P.streamify(res, rate)
-      res = P.peephole(res)
-      res = P.make_mem_happy(res)
+      local res = P.opt(mod, rate)
+      local r,s = P.rigel(res)
 
       local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
       local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
@@ -113,7 +108,7 @@ for _,example in ipairs(examples) do
 
       R.harness{
          backend = 'metadata',
-         fn = res,
+         fn = r,
          inFile = in_image, inSize = in_size,
          outFile = filename, outSize = out_size,
          earlyOverride = 48000000,
@@ -127,7 +122,7 @@ for _,example in ipairs(examples) do
 
          R.harness{
             backend = backend,
-            fn = res,
+            fn = r,
             inFile = in_image, inSize = in_size,
             outFile = filename, outSize = out_size,
             earlyOverride = 48000000,
