@@ -10,8 +10,8 @@ local IR = {}
 local C = asdl.NewContext()
 C:Define [[
 Type = bit(number n) # @todo: should this be bit, uint/int, fixed, etc?
-     | tuple(Type* ts)
      | array2d(Type t, number w, number h)
+     | tuple(Type* ts)
 
 Value = input(Type t)
       | const(Type t, any v) # @todo: this is tricky, maybe it should be fixed point types like the high level language?

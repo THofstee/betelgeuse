@@ -20,21 +20,14 @@ local x5 = L.map(add_c)(x4)
 local mod = L.lambda(x5, x0)
 -- G(mod)
 
-local inspect = require 'inspect'
-local DG = require 'dump.betelgeuse'
-print(DG(mod))
-assert(false)
-
 -- optimize
 local res = P.opt(mod, rate)
 G(res)
 
-print(inspect(res))
-assert(false)
-
 -- translate to rigel and run
 local r,s = P.rigel(res)
 
+local inspect = require 'inspect'
 local f = assert(io.open(string.format("dbg/%s-%s.txt", rate[1], rate[2]), "w"))
 f:write(inspect(r, {
                    process = function(item, path)
@@ -44,7 +37,7 @@ f:write(inspect(r, {
                       if path[#path] == 'globals' then return nil end
                       if path[#path] == 'globalMetadata' then return nil end
                       if path[#path] == 'makeSystolic' then return nil end
-                      if path[#path] == 'name' then return nil end
+                      -- if path[#path] == 'name' then return nil end
                       if path[#path] == 'stateful' then return nil end
                       if path[#path] == 'delay' then return nil end
                       if path[#path] == 'type' then return tostring(item) end

@@ -3,6 +3,7 @@
 require 'betelgeuse.util'
 local asdl = require 'asdl'
 local List = asdl.List
+local memoize = require 'memoize'
 
 -- @todo: consider supporting tiling/stripping?
 -- @todo: flatMap?
@@ -11,8 +12,8 @@ local L = {}
 local T = asdl.NewContext()
 T:Define [[
 Type = fixed(number i, number f)
-     | tuple(Type* ts)
      | array2d(Type t, number w, number h)
+     | tuple(Type* ts)
 
 Value = input(Type t)
       | const(Type t, any v)
@@ -77,6 +78,71 @@ local function L_unwrap(w)
    end
 end
 
+--[[
+   TYPES
+--]]
+
+function L.fixed(i, f)
+   return T.fixed(i, f)
+end
+
+--- Creates a 2d array type.
+function L.array2d(t, w, h)
+   return T.array2d(t, w, h)
+end
+
+--- Creates a tuple type given any number of types.
+function L.tuple(...)
+   if #{...} == 1 then
+      return T.tuple(List(...))
+   else
+      return T.tuple(List{...})
+   end
+end
+
+--[[
+   VALUES
+--]]
+
+--- Creates an input value given a type.
+function L.input(t)
+   return T.input(t, t)
+end
+
+--- Returns a compile-time constant.
+function L.const(t, v)
+   return T.const(t, v, t)
+end
+
+--- Concatenates any number of values.
+function L.concat(...)
+   local t = {}
+   for i,v in ipairs({...}) do
+      t[i] = v.type
+   end
+
+   return T.concat(List{...}, L.tuple(t))
+end
+
+function L.select(v, n)
+   return T.select(v, n, v.t.ts[n])
+end
+
+--- Applies the module on the provided value.
+function L.apply(m, v)
+   local m = L_unwrap(m)
+
+   if type(m) == 'function' then
+      return m(v)
+   else
+      return T.apply(m, v, m.type_func(v.type))
+   end
+end
+
+--[[
+   MODULES
+--]]
+
 --- Returns a module that will create a stencil of the image at every input.
 -- [a] -> [[a]]
 function L.stencil(off_x, off_y, ext_x, ext_y)
@@ -87,6 +153,7 @@ function L.stencil(off_x, off_y, ext_x, ext_y)
 
    return L_wrap(T.stencil(off_x, off_y, ext_x, ext_y, type_func))
 end
+L.stencil = memoize(L.stencil)
 
 --- Returns a module that will create a stencil of the image at every input, offset by a specified amount.
 -- ([a], [(i,j)]) -> [[a]]
@@ -105,6 +172,7 @@ function L.gather_stencil(ext_x, ext_y)
 
    return L_wrap(T.gather_stencil(ext_x, ext_y, type_func))
 end
+L.gather_stencil = memoize(L.gather_stencil)
 
 --- Returns a module that will duplicate the input to a 2d array.
 -- This module will return a 2d array where every element is equal to the input once applied.
@@ -117,6 +185,7 @@ function L.broadcast(w, h)
 
    return L_wrap(T.broadcast(w, h, type_func))
 end
+L.broadcast = memoize(L.broadcast)
 
 --- Returns a module that will pad the input by a specified amount.
 function L.pad(left, right, top, bottom)
@@ -127,6 +196,7 @@ function L.pad(left, right, top, bottom)
 
    return L_wrap(T.pad(left, right, top, bottom, type_func))
 end
+L.pad = memoize(L.pad)
 
 --- Returns a module that will crop the input by a specified amount.
 function L.crop(left, right, top, bottom)
@@ -137,6 +207,7 @@ function L.crop(left, right, top, bottom)
 
    return L_wrap(T.crop(left, right, top, bottom, type_func))
 end
+L.crop = memoize(L.crop)
 
 function L.upsample(x, y)
    local function type_func(t)
@@ -146,6 +217,7 @@ function L.upsample(x, y)
 
    return L_wrap(T.upsample(x, y, type_func))
 end
+L.upsample = memoize(L.upsample)
 
 function L.downsample(x, y)
    local function type_func(t)
@@ -157,6 +229,7 @@ function L.downsample(x, y)
 
    return L_wrap(T.downsample(x, y, type_func))
 end
+L.downsample = memoize(L.downsample)
 
 --- Returns a module that will zip two inputs together.
 -- ([a], [b]) -> [(a, b)].
@@ -179,6 +252,7 @@ function L.zip()
 
    return L_wrap(T.zip(type_func))
 end
+L.zip = memoize(L.zip)
 
 --- Returns a module that will recursively zip inputs.
 -- Given a tuple of inputs, it will recursively apply maps of zips while all inputs share the same outer array type.
@@ -216,6 +290,7 @@ function L.zip_rec()
       end
    )
 end
+L.zip_rec = memoize(L.zip_rec)
 
 -- @todo: at some point should consider if add/sub/mul/div should take in n inputs instead of just a binop, for the sake of extending bit widths.
 --- Returns a module that adds two primitive types.
@@ -239,6 +314,7 @@ function L.add(expanding)
 
    return L_wrap(T.add(expanding, type_func))
 end
+L.add = memoize(L.add)
 
 --- Returns a module that subtracts two primitive types.
 function L.sub(expanding)
@@ -261,6 +337,7 @@ function L.sub(expanding)
 
    return L_wrap(T.sub(expanding, type_func))
 end
+L.sub = memoize(L.sub)
 
 --- Returns a module that multiplies two primitive types.
 function L.mul(expanding)
@@ -283,6 +360,7 @@ function L.mul(expanding)
 
    return L_wrap(T.mul(expanding, type_func))
 end
+L.mul = memoize(L.mul)
 
 --- Returns a module that divides two primitive types.
 function L.div(expanding)
@@ -305,6 +383,7 @@ function L.div(expanding)
 
    return L_wrap(T.div(expanding, type_func))
 end
+L.div = memoize(L.div)
 
 --- Returns a module that shifts by n bits
 function L.shift(n, expanding)
@@ -321,6 +400,7 @@ function L.shift(n, expanding)
 
    return L_wrap(T.shift(n, expanding, type_func))
 end
+L.shift = memoize(L.shift)
 
 --- Truncates to i integer and f fractional bits
 function L.trunc(i, f)
@@ -332,6 +412,7 @@ function L.trunc(i, f)
 
    return L_wrap(T.trunc(i, f, type_func))
 end
+L.trunc = memoize(L.trunc)
 
 --- Buffers a stream with a FIFO queue.
 function L.buffer(size)
@@ -341,6 +422,7 @@ function L.buffer(size)
 
    return L_wrap(T.buffer(size, type_func))
 end
+L.buffer = memoize(L.buffer)
 
 --- Returns a module that is a map given a module to apply.
 function L.map(m)
@@ -353,6 +435,7 @@ function L.map(m)
 
    return L_wrap(T.map(m, type_func))
 end
+L.map = memoize(L.map)
 
 --- Returns a module that is a sequence of modules being applied,
 function L.chain(...)
@@ -371,6 +454,7 @@ function L.chain(...)
       end
    )
 end
+L.chain = memoize(L.chain)
 
 --- Returns a module that is a reduce given the provided module.
 -- This is implemented using a tree-reduction.
@@ -400,45 +484,12 @@ function L.reduce(m)
 
    return L_wrap(T.reduce(m, type_func))
 end
-
---- Applies the module on the provided value.
-function L.apply(m, v)
-   local m = L_unwrap(m)
-
-   if type(m) == 'function' then
-      return m(v)
-   else
-      return T.apply(m, v, m.type_func(v.type))
-   end
-end
-
---- Creates an input value given a type.
-function L.input(t)
-   return T.input(t, t)
-end
+L.reduce = memoize(L.reduce)
 
 -- --- Creates a 1d array type.
 -- function L.array(t, n)
 --    return T.array2d(t, n, 1)
 -- end
-
---- Creates a 2d array type.
-function L.array2d(t, w, h)
-   return T.array2d(t, w, h)
-end
-
---- Creates a tuple type given any number of types.
-function L.tuple(...)
-   if #{...} == 1 then
-      return T.tuple(List(...))
-   else
-      return T.tuple(List{...})
-   end
-end
-
-function L.fixed(i, f)
-   return T.fixed(i, f)
-end
 
 -- --- A placeholder that can be replaced later.
 -- -- This might be needed for feedback loops.
@@ -447,25 +498,6 @@ end
 -- function L.placeholder(t)
 --    return T.placeholder(t, t)
 -- end
-
---- Concatenates any number of values.
-function L.concat(...)
-   local t = {}
-   for i,v in ipairs({...}) do
-      t[i] = v.type
-   end
-
-   return T.concat(List{...}, L.tuple(t))
-end
-
-function L.select(v, n)
-   return T.select(v, n, v.t.ts[n])
-end
-
---- Returns a compile-time constant.
-function L.const(t, v)
-   return T.const(t, v, t)
-end
 
 --- Creates a module given a value and an input variable.
 function L.lambda(f, x)
@@ -479,6 +511,7 @@ function L.lambda(f, x)
 
    return L_wrap(T.lambda(f, x, type_func))
 end
+L.lambda = memoize(L.lambda)
 
 --- Exports library functions to the global namespace.
 function L.import()

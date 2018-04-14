@@ -1,6 +1,7 @@
 local L = require 'betelgeuse.lang'
+local P = require 'betelgeuse.passes'
 local G = require 'graphview'
-local D = require 'dump.betelgeuse'
+local D = require 'dump'
 
 -- map -> upsample -> map -> downsample -> map
 local x = L.input(L.fixed(9, 0))
@@ -19,4 +20,19 @@ G(mod)
 
 local s = D(mod)
 print(s)
-G(loadstring(s)())
+G(assert(loadstring(s))())
+
+local rate = { 1, 1 }
+local res = P.opt(mod, rate)
+G(res)
+
+local s = D(res)
+print(s)
+G(assert(loadstring(s))())
+
+local r = P.rigel(res)
+G(r)
+
+local s = D(r)
+print(s)
+G(assert(loadstring(s))())

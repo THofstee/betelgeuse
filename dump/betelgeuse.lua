@@ -44,12 +44,16 @@ function dump.wrapped(w)
    return dump(L.unwrap(w))
 end
 
-function dump.array2d(t)
-   return string.format("L.array2d(%s, %s, %s)", dump(t.t), t.w, t.h)
-end
+--[[
+   TYPES
+--]]
 
 function dump.fixed(t)
    return string.format("L.fixed(%s, %s)", t.i, t.f)
+end
+
+function dump.array2d(t)
+   return string.format("L.array2d(%s, %s, %s)", dump(t.t), t.w, t.h)
 end
 
 function dump.tuple(t)
@@ -61,20 +65,16 @@ function dump.tuple(t)
    return string.format("L.tuple(%s)", table.concat(types, ", "))
 end
 
+--[[
+   VALUES
+--]]
+
 function dump.input(i)
    s[#s+1] = newvar(i, string.format("L.input(%s)", dump(i.type)))
 end
 
 function dump.const(c)
    s[#s+1] = newvar(c, string.format("L.const(%s, %s)", dump(c.type), c.v))
-end
-
-function dump.broadcast(m)
-   return C.broadcast(
-      dump(m.type.t),
-      m.w,
-      m.h
-   )
 end
 
 function dump.concat(c)
@@ -88,10 +88,22 @@ function dump.concat(c)
 end
 
 function dump.select(a)
-   return R.index{
-      input = dump(a.v),
-      key = a.n-1
-   }
+   dump(a.v)
+   s[#s+1] = newvar(c, string.format("L.select(%s, %s)", ids[a.v], a.n))
+end
+
+function dump.apply(a)
+   dump(a.m)
+   dump(a.v)
+   s[#s+1] = newvar(a, string.format("L.apply(%s, %s)", ids[a.m], ids[a.v]))
+end
+
+--[[
+   MODULES
+--]]
+
+function dump.broadcast(m)
+   s[#s+1] = newvar(m, string.format("L.broadcast(%s, %s", m.w, m.h))
 end
 
 function dump.add(m)
@@ -100,39 +112,37 @@ function dump.add(m)
 end
 
 function dump.sub(m)
-   s[#s+1] = string.format("L.sub()")
+   s[#s+1] = newvar(m, string.format("L.sub()"))
 end
 
 function dump.mul(m)
-   s[#s+1] = string.format("L.mul()")
+   s[#s+1] = newvar(m,string.format("L.mul()"))
 end
 
 function dump.div(m)
-   s[#s+1] = string.format("L.div()")
+   s[#s+1] = newvar(m, string.format("L.div()"))
 end
 
 function dump.shift(m)
-   s[#s+1] = string.format("L.shift(%s)", m.n)
+   s[#s+1] = newvar(m, string.format("L.shift(%s)", m.n))
 end
 
 function dump.trunc(m)
-   s[#s+1] = string.format("L.trunc(%s, %s)", m.i, m.f)
+   s[#s+1] = newvar(m, string.format("L.trunc(%s, %s)", m.i, m.f))
 end
 
 function dump.reduce(m)
-   s[#s+1] = string.format("L.reduce(%s)", dump(m.m))
+   s[#s+1] = newvar(m, string.format("L.reduce(%s)", dump(m.m)))
 end
 
 function dump.pad(m)
-   s[#s+1] = string.format("L.pad(%s, %s, %s, %s)",
-                        m.left, m.right, m.top, m.bottom
-   )
+   s[#s+1] = newvar(m, string.format("L.pad(%s, %s, %s, %s)",
+                                     m.left, m.right, m.top, m.bottom))
 end
 
 function dump.crop(m)
-   s[#s+1] = string.format("L.crop(%s, %s, %s, %s)",
-                        m.left, m.right, m.top, m.bottom
-   )
+   s[#s+1] = newvar(m, string.format("L.crop(%s, %s, %s, %s)",
+                                     m.left, m.right, m.top, m.bottom))
 end
 
 function dump.upsample(m)
@@ -144,17 +154,13 @@ function dump.downsample(m)
 end
 
 function dump.stencil(m)
-   s[#s+1] = string.format("L.stencil(%s, %s, %s, %s)",
-                        m.offset_x, m.offset_y,
-                        m.extent_x, m.extent_y
-   )
+   s[#s+1] = newvar(m, string.format("L.stencil(%s, %s, %s, %s)",
+                                     m.offset_x, m.offset_y,
+                                     m.extent_x, m.extent_y))
 end
 
 function dump.buffer(m)
-   return R.buffer{
-      type = dump(m.in_type),
-      depth = m.size,
-   }
+   s[#s+1] = newvar(m, string.format("L.buffer(%s)", m.size))
 end
 
 function dump.lambda(l)
@@ -163,19 +169,13 @@ function dump.lambda(l)
    s[#s+1] = newvar(l, string.format("L.lambda(%s, %s)", ids[l.f], ids[l.x]))
 end
 
-function dump.apply(a)
-   dump(a.m)
-   dump(a.v)
-   s[#s+1] = newvar(a, string.format("L.apply(%s, %s)", ids[a.m], ids[a.v]))
-end
-
 function dump.map(m)
    dump(m.m)
    s[#s+1] = newvar(m, string.format("L.map(%s)", ids[m.m]))
 end
 
 function dump.zip(m)
-   s[#s+1] = string.format("L.zip(%s)", dump(m.m))
+   s[#s+1] = newvar(m, string.format("L.zip(%s)", dump(m.m)))
 end
 
 local function entry(m)

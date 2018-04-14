@@ -383,28 +383,12 @@ end
 
 function translate.concat(x, hs)
    local translated = {}
-   local translated_t = {}
    for i,v in ipairs(x.vs) do
-      translated_t[i] = translate(v.type, hs)
       translated[i] = translate(v, hs)
-
-      -- print(inspect(translated_t[i], {depth = 2}))
-      -- print(inspect(translated[i].type, {depth = 2}))
-      if hs then
-         translated_t[i] = translated[i].type.params.A
-      else
-         translated_t[i] = translated[i].type
-      end
-      -- if translated_t[i] ~= translated[i].type.params.A then
-
-      -- end
    end
 
    if hs then
-      return R.connect{
-         input = R.concat(translated),
-         toModule = RM.packTuple(translated_t),
-      }
+      return R.fanIn(translated)
    else
       -- print(inspect(R.concat(translated), {depth = 2}))
       return R.concat(translated)
