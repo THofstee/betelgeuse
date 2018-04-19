@@ -3,7 +3,7 @@ local memoize = require 'memoize'
 local inspect = require 'inspect'
 local log = require 'log'
 
-local _VERBOSE = true
+local _VERBOSE = false
 
 local function linenum(level)
    return debug.getinfo(level or 2, 'l').currentline
@@ -189,8 +189,6 @@ function reduce_rate.apply(a, util)
    else
       return IR.apply(m, v)
    end
-
-   return IR.apply(reduce_rate(m.m, util), reduce_rate(m.v, util))
 end
 
 function reduce_rate.input(m, util)
@@ -291,8 +289,8 @@ function reduce_rate.reduce(m, util)
    end
 end
 
-
 function reduce_rate.map_x(m, util)
+   print(inspect(m.size))
    local w = m.size[1]
    local h = m.size[2]
 
@@ -309,10 +307,14 @@ function reduce_rate.map_x(m, util)
    if effective_rate < 1 and par ~= 1 then
       log.warn('case of par>1 not yet implemented')
    elseif effective_rate < 1 and par == 1 then
-      print(inspect(m, {depth = 2}))
+      -- print(inspect(m, {depth = 2}))
       local newm = reduce_rate(m.m, { util[1], math.floor(util[2]/max_reduce) })
-      print(inspect(newm, {depth = 2}))
-      return IR.map_t(newm, m.size)
+      -- print(inspect(newm, {depth = 2}))
+      log.warn('not sure if this is doing the right thing...')
+      local a = IR.map_t(newm, m.size)
+      local inter = IR.apply(IR.map_t(a, { par, 1}), in_rate)
+      local out_rate = IR.apply(IR.flatten({ par, 1}), inter)
+      return IR.lambda(out_rate, input)
 
       -- -- we would still like to further reduce parallelism, reduce inner module
       -- local in_cast = R.connect{
@@ -632,7 +634,13 @@ function reduce_rate.downsample_x(m, util)
 
    local out_size = { m.type_out.w, m.type_out.h }
 
-   m = IR.downsample_x(m.x, m.y)
+   if par_in ~= par_out then
+      m = IR.downsample_x(m.x, m.y)
+   else
+      local cyc = (m.x*m.y)*par_out/par_in
+      log.warn(string.format('@todo: double check this, par_in = %s, par_out = %s, cyc = %s, in_size = %s, out_size = %s', par_in, par_out, cyc, inspect(in_size), inspect(out_size)))
+      m = IR.downsample_t(m.x, m.y, cyc)
+   end
    local inter = IR.apply(IR.map_t(m, { par_out, 1 }), in_rate)
 
    local out_rate = IR.apply(IR.flatten({ par_out, 1 }), inter)

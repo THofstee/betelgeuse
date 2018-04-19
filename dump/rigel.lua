@@ -1,7 +1,7 @@
 local log = require 'log'
 local inspect = require 'inspect'
 
-local _VERBOSE = true
+local _VERBOSE = false
 
 -- unique id generator
 local id = 0
@@ -86,6 +86,11 @@ function dump.input(i)
    s[#s+1] = newvar(i, string.format("R.input(%s)", dump(i.type)))
 end
 
+function dump.constant(c)
+   s[#s+1] = newvar(c, string.format("R.constant{ type = %s, value = %s}",
+                                     dump(c.type), c.value))
+end
+
 function dump.const(c)
    s[#s+1] = newvar(c, string.format("R.const(%s, %s)", dump(c.type), c.v))
 end
@@ -128,7 +133,7 @@ end
 
 function dump.lift(m)
    if not m.generator then
-      print(inspect(m, {depth = 2}))
+      -- print(inspect(m, {depth = 2}))
       local str = m.name:match("([^_]*)_")
       assert(dump[str], "dispatch function " .. str .. " is nil")
       dump[str](m)
@@ -151,13 +156,14 @@ dump["C.cast"] = function(m)
 end
 
 dump["C.shiftAndCast"] = function(m)
-   local shift = m.name:match("shift_(%d+)")
+   local shift = m.name:match("shift_(%d+)") or m.name:match("shift(%d+)")
+
    local str = "R.modules.shiftAndCast{ inType = %s, outType = %s, shift = %s }"
    s[#s+1] = newvar(m, str:format(dump(m.inputType), dump(m.outputType), shift))
 end
 
 dump["C.slice"] = function(m)
-   print(inspect(m, {depth = 2}))
+   -- print(inspect(m, {depth = 2}))
 
    local x_lo = m.name:match("xl(%d+)_")
    local x_hi = m.name:match("xh(%d+)_")
@@ -177,6 +183,21 @@ dump["C.broadcast"] = function(m)
                                      dump(m.inputType), W, H))
 end
 
+dump["upsampleXSeq"] = function(m)
+   local str = "M.upsampleXSeq(%s, %s, %s)"
+   s[#s+1] = newvar(m, str:format(dump(m.A), m.T, m.scale))
+end
+
+dump["rigel.downsampleXSeq"] = function(m)
+   local W = m.name:match("W(%d+)_")
+   local H = m.name:match("H(%d+)_")
+   local V = m.name:match("T(%d+)_")
+   local X = m.name:match("scale(%d+)")
+
+   local str = "M.downsampleXSeq(%s, %s, %s, %s, %s)"
+   s[#s+1] = newvar(m, str:format(dump(m.inputType.over), W, H, V, X))
+end
+
 dump["C.downsampleSeq"] = function(m)
    local V = m.inputType.params.A.size[1] * m.inputType.params.A.size[2]
    local W = m.name:match("W(%d+)_")
@@ -193,7 +214,7 @@ dump["C.downsampleSeq"] = function(m)
                        table.concat({ X, Y }, ", ")))
 end
 
-dump["DownsampleXSeq"] = function(m)
+dump["C.flatten2"] = function(m)
    print(inspect(m, {depth = 2}))
    assert(false)
 end
@@ -256,6 +277,11 @@ function dump.changeRate(m)
 end
 
 function dump.lambda(l)
+   if l.name:find("map") then
+      print(inspect(l, {depth = 2}))
+      assert(false)
+   end
+
    dump(l.input)
    dump(l.output)
    s[#s+1] = newvar(l, string.format("R.defineModule{ input = %s, output = %s }",
@@ -263,6 +289,9 @@ function dump.lambda(l)
 end
 
 local function entry(m)
+   id = 0
+   ids = setmetatable({}, ids_mt)
+   s = {}
    s[#s+1] = "local R = require 'rigelSimple'"
    s[#s+1] = "local M = require 'modules'"
    s[#s+1] = "local C = require 'examplescommon'"

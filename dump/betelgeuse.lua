@@ -179,6 +179,9 @@ function dump.zip(m)
 end
 
 local function entry(m)
+   id = 0
+   ids = setmetatable({}, ids_mt)
+   s = {}
    s[#s+1] = "local L = require 'betelgeuse.lang'"
    dump(m)
    s[#s+1] = string.format("return %s", "id" .. id)

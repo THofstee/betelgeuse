@@ -3,7 +3,21 @@ local inspect = require 'inspect'
 local memoize = require 'memoize'
 local inline = require 'betelgeuse.passes.inline'
 
-local function fuse(m)
+local function peephole(cur, input)
+   if cur.m.kind == 'shift' then
+      if cur.m.n == 0 then
+         return input
+      end
+   elseif cur.m.kind == 'trunc' then
+      if type_out == type_in then
+         return input
+      end
+   end
+
+   return I.apply(cur.m, input)
+end
+
+local function skeleton(m)
    local input = m.x
 
    local function helper(cur)
@@ -16,7 +30,7 @@ local function fuse(m)
 
          local function helper2(cur)
             if cur.kind == 'lambda' then
-               return fuse(cur)
+               return skeleton(cur)
             elseif cur.kind == 'map_t' or cur.kind == 'map_x' then
                return I[cur.kind](helper2(cur.m), cur.size)
             else
@@ -28,7 +42,7 @@ local function fuse(m)
             cur.m = helper2(cur.m)
          end
 
-         return I.apply(cur.m, input)
+         return peephole(cur, input)
       elseif cur.kind == 'concat' then
          local inputs = {}
          for i,v in ipairs(cur.vs) do
@@ -36,9 +50,7 @@ local function fuse(m)
          end
          return I.concat(unpack(inputs))
       elseif cur.kind == 'select' then
-         local input = helper(cur.v)
-         assert(input.kind == 'concat')
-         return input.vs[cur.n]
+         return I.select(helper(cur.v), cur.n)
       elseif cur.kind == 'const' then
          return cur
       else
@@ -48,6 +60,6 @@ local function fuse(m)
 
    return I.lambda(helper(m.f), m.x)
 end
-fuse = memoize(fuse)
+skeleton = memoize(skeleton)
 
-return fuse
+return skeleton

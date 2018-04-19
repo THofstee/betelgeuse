@@ -2,6 +2,9 @@ local L = require 'betelgeuse.lang'
 local P = require 'betelgeuse.passes'
 local G = require 'graphview'
 local D = require 'dump'
+G.render = true
+
+local loadstring = loadstring or load
 
 -- map -> upsample -> map -> downsample -> map
 local x = L.input(L.fixed(9, 0))
@@ -18,21 +21,55 @@ local x5 = L.map(add_c)(x4)
 local mod = L.lambda(x5, x0)
 G(mod)
 
+local function write_to_file(filename, str)
+   local f = assert(io.open(filename, "w"))
+   f:write(str)
+   f:close()
+end
+
 local s = D(mod)
-print(s)
+-- print(s)
+write_to_file("dbg/dump-bg.lua", s)
 G(assert(loadstring(s))())
 
-local rate = { 1, 1 }
+local res = P.translate(mod)
+local s = D(res)
+write_to_file("dbg/dump-translate.lua", s)
+
+G(res)
+
+local rate = { 1, 2 }
+
+local util = P.reduction_factor(mod, rate)
+local res = P.transform(res, util)
+local s = D(res)
+write_to_file("dbg/dump-transform.lua", s)
+write_to_file("dbg/ir.txt", require'inspect'(res))
+
+G(res)
+
+local res = P.fuse_reshape(res)
+local s = D(res)
+write_to_file("dbg/dump-reshape.lua", s)
+
+local res = P.fuse_map(res)
+local s = D(res)
+write_to_file("dbg/dump-map.lua", s)
+
 local res = P.opt(mod, rate)
 G(res)
 
 local s = D(res)
-print(s)
+-- print(s)
+write_to_file("dbg/dump-ir.lua", s)
 G(assert(loadstring(s))())
+
+G(res.f)
 
 local r = P.rigel(res)
 G(r)
 
 local s = D(r)
-print(s)
+-- print(s)
+write_to_file("dbg/dump-rigel.lua", s)
 G(assert(loadstring(s))())

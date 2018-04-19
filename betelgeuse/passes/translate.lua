@@ -10,11 +10,11 @@ local _VERBOSE = false
 
 local translate = {}
 local translate_mt = {
-   __call = memoize(function(t, m)
+   __call = function(t, m)
          if _VERBOSE then log.trace("translate." .. m.kind) end
          assert(t[m.kind], "dispatch function " .. m.kind .. " is nil")
          return t[m.kind](m)
-   end)
+   end
 }
 setmetatable(translate, translate_mt)
 
@@ -44,6 +44,7 @@ end
 function translate.input(i)
    return I.input(translate(i.type))
 end
+translate.input = memoize(translate.input)
 
 -- @todo: consider wrapping singletons in T[1,1]
 function translate.const(c)
@@ -61,6 +62,7 @@ function translate.const(c)
 
    return I.const(translate(c.type), convert(c.v))
 end
+translate.const = memoize(translate.const)
 
 function translate.broadcast(m)
    return C.broadcast(
@@ -77,6 +79,7 @@ function translate.concat(c)
    end
    return I.concat(unpack(translated))
 end
+translate.concat = memoize(translate.concat)
 
 function translate.select(a)
    return R.index{
@@ -84,6 +87,7 @@ function translate.select(a)
       key = a.n-1
    }
 end
+translate.select = memoize(translate.select)
 
 function translate.add(m)
    -- figure out what width the inputs need to be
@@ -288,6 +292,7 @@ function translate.apply(a)
       return I.apply(m, v)
    end
 end
+translate.apply = memoize(translate.apply)
 
 function translate.map(m)
    local size = { m.type.w, m.type.h }
@@ -306,7 +311,5 @@ function translate.zip(m)
       size = { m.out_type.w, m.out_type.h }
    }
 end
--- @todo: I think only the values should be memoized.
--- translate.zip = memoize(translate.zip)
 
 return translate

@@ -11,7 +11,6 @@ local function newid()
 end
 
 -- map ir nodes to their ids
-local ids = {}
 local ids_mt = {
    __index = function(tbl, key)
       -- create a new id if one doesn't exist already
@@ -19,7 +18,7 @@ local ids_mt = {
       return tbl[key]
    end
 }
-setmetatable(ids, ids_mt)
+local ids = setmetatable({}, ids_mt)
 
 local function newvar(m, str)
    return string.format("local %s = %s", ids[m], str)
@@ -84,7 +83,7 @@ end
 
 function dump.select(a)
    dump(a.v)
-   s[#s+1] = newvar(c, string.format("I.select(%s, %s)", ids[a.v], a.n))
+   s[#s+1] = newvar(a, string.format("I.select(%s, %s)", ids[a.v], a.n))
 end
 
 function dump.apply(a)
@@ -213,6 +212,9 @@ function dump.lambda(l)
 end
 
 local function entry(m)
+   id = 0
+   ids = setmetatable({}, ids_mt)
+   s = {}
    s[#s+1] = "local I = require 'betelgeuse.ir'"
    dump(m)
    s[#s+1] = string.format("return %s", "id" .. id)

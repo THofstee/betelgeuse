@@ -33,6 +33,7 @@ P.json = require 'betelgeuse.passes.json'
 P.fuse_reshape = require 'betelgeuse.passes.fuse_reshape'
 P.fuse_map = require 'betelgeuse.passes.fuse_map'
 P.fuse_concat = require 'betelgeuse.passes.fuse_concat'
+P.peephole = require 'betelgeuse.passes.peephole'
 P.rigel = require 'betelgeuse.passes.rigel'
 
 function P.opt(mod, rate)
@@ -44,6 +45,7 @@ function P.opt(mod, rate)
    res = P.fuse_reshape(res)
    res = P.fuse_map(res)
    res = P.fuse_concat(res)
+   res = P.peephole(res)
 
    return res
 end
@@ -303,258 +305,6 @@ local function divisor(n, k)
    return 1
 end
 
--- @todo: maybe this should only take in a lambda as input
-local function peephole(m)
-   local function fuse_cast(cur, inputs)
-      if cur.kind == 'apply' then
-         if base(cur).generator == 'C.cast' then
-            local temp_cur = base(cur)
-
-            if #inputs == 1 and base(inputs[1]).generator == 'C.cast' then
-               local temp_input = base(inputs[1])
-
-               if temp_input.inputType == temp_cur.outputType then
-                  -- eliminate inverse pairs
-                  return inputs[1].inputs[1]
-               else
-                  -- fuse casts
-                  -- @todo: this is somewhat broken in rigel.
-                  local can_cast, _ = pcall(function()
-                        return rtypes.checkExplicitCast(
-                           temp_input.inputType,
-                           temp_cur.outputType
-                        )
-                  end)
-
-                  if false then
-                     return R.connect{
-                        input = inputs[1].inputs[1],
-                        toModule = R.HS(
-                           C.cast(
-                              temp_input.inputType,
-                              temp_cur.outputType
-                           )
-                        )
-                     }
-                  else
-                     return R.connect{
-                        input = inputs[1],
-                        toModule = cur.fn
-                     }
-                  end
-               end
-            elseif temp_cur.inputType == temp_cur.outputType then
-               -- remove redundant casts
-               return inputs[1]
-            end
-         elseif base(cur).generator == 'C.broadcast' then
-            -- change broadcasts to { 1, 1 } to just be casts
-            local out_size = base(cur).outputType.size
-            if out_size[1]*out_size[2] == 1 then
-               return R.connect{
-                  input = inputs[1],
-                  toModule = R.HS(
-                     C.cast(
-                        base(cur).inputType,
-                        base(cur).outputType
-                     )
-                  )
-               }
-            end
-         end
-
-         return R.connect{
-            input = inputs[1],
-            toModule = cur.fn
-         }
-      elseif cur.kind == 'concat' then
-         return R.concat(inputs)
-      elseif cur.kind == 'input' then
-         return cur
-      elseif cur.kind == 'applyMethod' then
-         return cur
-      else
-         assert(false, 'not implemented: ' .. cur.kind)
-      end
-   end
-
-   local function fuse_changeRate(cur, inputs)
-      if cur.kind == 'apply' then
-         if base(cur).kind == 'changeRate' then
-            if #inputs == 1 and base(inputs[1]).kind == 'changeRate' then
-               local temp_cur = base(cur)
-               local temp_input = base(inputs[1])
-
-               if(temp_cur.inputRate == temp_input.outputRate) then
-                  local input = inputs[1].inputs[1]
-                  local size = temp_cur.outputType.params.A.size
-
-                  return change_rate(input, size)
-               end
-            end
-         end
-
-         return R.connect{
-            input = inputs[1],
-            toModule = cur.fn
-         }
-      elseif cur.kind == 'concat' then
-         return R.concat(inputs)
-      elseif cur.kind == 'input' then
-         return cur
-      elseif cur.kind == 'applyMethod' then
-         return cur
-      else
-         assert(false, 'not implemented: ' .. cur.kind)
-      end
-   end
-
-   local function removal(cur, inputs)
-      if cur.kind == 'apply' then
-         local temp_cur = base(cur)
-         -- if temp_cur.kind == 'lambda' then
-         --    -- inline lambdas
-         --    return inline_hs(temp_cur, inputs[1])
-         -- elseif temp_cur.generator == 'broadcastWide' then
-         if temp_cur.generator == 'broadcastWide' then
-            -- constants into broadcasts can be eliminated
-            if base(inputs[1]).generator == 'C.broadcast' then
-               local in_size = temp_cur.inputType.size
-               local out_size = temp_cur.outputType.size
-               return R.connect{
-                  input = inputs[1],
-                  toModule = R.HS(
-                     R.modules.changeRate{
-                        type = temp_cur.inputType.over,
-                        H = 1,
-                        inW = in_size[1]*in_size[2],
-                        outW = out_size[1]*out_size[2]
-                     }
-                  )
-               }
-            end
-         elseif temp_cur.kind == 'changeRate' then
-            if temp_cur.inputRate == temp_cur.outputRate then
-               -- remove redundant changeRates
-               return inputs[1]
-            end
-         elseif temp_cur.generator == 'C.cast' then
-            if temp_cur.inputType == temp_cur.outputType then
-               -- remove redundant casts
-               return inputs[1]
-            end
-         elseif temp_cur.generator == 'C.identity' then
-            return inputs[1]
-         elseif temp_cur.kind == 'upsampleXSeq' then
-            if base(inputs[1]).kind == 'constSeq' then
-               -- constSeq to an upsample of the same type doesn't need upsample
-               if base(inputs[1]).outputType == temp_cur.outputType.params.A then
-                  -- @todo: upsampleXSeq has RV type, clean this up
-                  return inputs[1]
-               end
-            end
-         elseif temp_cur.kind == 'map' then
-            -- -- inline maps over 1 element
-            -- if temp_cur.H == 1 and temp_cur.W == 1 then
-            --    local inter = R.connect{
-            --       input = inputs[1],
-            --       toModule = R.HS(temp_cur.fn)
-            --    }
-
-            --    return R.connect{
-            --       input = inter,
-            --       toModule = R.HS(
-            --          C.cast(
-            --             inter.type.params.A,
-            --             temp_cur.outputType
-            --          )
-            --       )
-            --    }
-            -- end
-         end
-
-         return R.connect{
-            input = inputs[1],
-            toModule = cur.fn
-         }
-      elseif cur.kind == 'concat' then
-         return R.concat(inputs)
-      elseif cur.kind == 'input' then
-         return cur
-      elseif cur.kind == 'applyMethod' then
-         return cur
-      else
-         assert(false, 'not implemented: ' .. cur.kind)
-      end
-   end
-
-   local output
-   if m.kind == 'lambda' then
-      output = m.output
-   else
-      output = m
-   end
-
-   for k=1,5 do
-      output = output:visitEach(fuse_cast)
-      output = output:visitEach(fuse_changeRate)
-      output = output:visitEach(removal)
-   end
-
-   if m.kind == 'lambda' then
-      return R.defineModule{
-         input = m.input,
-         output = output
-      }
-   else
-      return output
-   end
-end
-P.peephole = peephole
-
-local function make_mem_happy(m)
-   local input = R.input(R.HS(R.array2d(rtypes.uint(8), m.inputType.params.A.size[1], m.inputType.params.A.size[2])))
-
-   local cast = R.connect{
-      input = input,
-      toModule = R.HS(
-         R.modules.map{
-            fn = C.cast(
-               rtypes.uint(8),
-               m.inputType.params.A.over
-            ),
-            size = m.inputType.params.A.size
-         }
-      )
-   }
-
-   local temp = R.connect{
-      input = cast,
-      toModule = m
-   }
-
-   local output = R.connect{
-      input = temp,
-      toModule = R.HS(
-         R.modules.map{
-            fn = C.cast(
-               m.outputType.params.A.over,
-               -- m.outputType.params.A,
-               rtypes.uint(8)
-            ),
-            -- size = m.outputType.params.A.size
-            size = { 1, 1 }
-         }
-      )
-   }
-
-   return R.defineModule{
-      input = input,
-      output = output
-   }
-end
-P.make_mem_happy = make_mem_happy
-
 local function get_type_signature(cur)
    if cur.kind == 'input' or cur.kind == 'constant' then
       return 'nil' .. ' -> ' .. tostring(cur.type)
@@ -574,15 +324,6 @@ local function get_type_signature(cur)
    end
 end
 P.get_type_signature = get_type_signature
-
-local function rates(m)
-   m.output:visitEach(function(cur)
-         print(P.get_name(cur))
-         print(':: ' .. P.get_type_signature(cur))
-         -- print(inspect(cur:calcSdfRate(m.output))) -- @todo: replace
-   end)
-end
-P.rates = rates
 
 local function needs_hs(m)
    local modules = {

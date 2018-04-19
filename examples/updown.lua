@@ -3,7 +3,7 @@ local P = require 'betelgeuse.passes'
 local G = require 'graphview'
 
 -- parse command line args
-local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
+local rate = { tonumber(arg[1]) or 2, tonumber(arg[2]) or 1 }
 
 -- map -> upsample -> map -> downsample -> map
 local x = L.input(L.fixed(9, 0))
