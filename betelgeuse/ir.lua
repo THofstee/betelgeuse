@@ -35,7 +35,10 @@ Module = add
        | reduce_x(Module m, table size)
        | reduce_t(Module m, table size)
        | stencil_x(number offset_x, number offset_y, number extent_x, number extent_y)
+       | stencil_t(number offset_x, number offset_y, number extent_x, number extent_y)
+       | pad_x(number left, number right, number top, number bottom)
        | pad_t(number left, number right, number top, number bottom)
+       | crop_x(number left, number right, number top, number bottom)
        | crop_t(number left, number right, number top, number bottom)
        | upsample_x(number x, number y)
        | upsample_t(number x, number y, number cycles)
@@ -91,6 +94,7 @@ function IR.concat(...)
 end
 
 function IR.select(v, n)
+   assert(v.type.kind == 'tuple', "select only works on tuples")
    return C.select(v, n, v.type.ts[n])
 end
 
@@ -257,12 +261,36 @@ function IR.stencil_x(x0, y0, x1, y1)
    return C.stencil_x(x0, y0, x1, y1, type_func)
 end
 
+function IR.stencil_t(x0, y0, x1, y1)
+   local function type_func(t)
+      return IR.array2d(IR.array2d(t.t, x1, y1), t.w, t.h)
+   end
+
+   return C.stencil_t(x0, y0, x1, y1, type_func)
+end
+
+function IR.pad_x(l, r, u, d)
+   local function type_func(t)
+      return IR.array2d(t.t, t.w+l+r, t.h+u+d)
+   end
+
+   return C.pad_x(l, r, u, d, type_func)
+end
+
 function IR.pad_t(l, r, u, d)
    local function type_func(t)
       return IR.array2d(t.t, t.w+l+r, t.h+u+d)
    end
 
    return C.pad_t(l, r, u, d, type_func)
+end
+
+function IR.crop_x(l, r, u, d)
+   local function type_func(t)
+      return IR.array2d(t.t, t.w-l-r, t.h-u-d)
+   end
+
+   return C.crop_x(l, r, u, d, type_func)
 end
 
 function IR.crop_t(l, r, u, d)

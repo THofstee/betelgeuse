@@ -229,68 +229,24 @@ end
 --    return R.concat(inputs)
 -- end
 
-function reduce_rate.reduce(m, util)
-   local input
-   if DONT then
-      input = m.inputs[1]
-   else
-      input = reduce_rate(m.inputs[1], util)
-   end
-
-   local m = base(m.fn)
-   local t = m.inputType
-   local w = m.W
-   local h = m.H
+function reduce_rate.reduce_x(m, util)
+   local w = m.size[1]
+   local h = m.size[2]
 
    local max_reduce = w*h
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
 
-   local in_rate = change_rate(input, { par, 1 })
+   local input = IR.input(m.type_in)
+   local in_rate = IR.apply(IR.partition({ par, 1 }), input)
 
-   local reduce_fn = m.fn
-   if reduce_fn.kind == 'lambda' then
-      reduce_fn = reduce_fn.output.fn
-   end
+   print(inspect(m, {depth = 2}))
+   print(inspect(util))
 
-   if par ~= 1 then
-      -- smaller reduce_par
-      local inter = R.connect{
-         input = in_rate,
-         toModule = R.HS(
-            R.modules.reduce{
-               fn = reduce_fn,
-               size = { par, 1 }
-            }
-         )
-      }
-
-      -- followed by reduce_seq
-      return R.connect{
-         input = inter,
-         toModule = R.HS(
-            R.modules.reduceSeq{
-               V = max_reduce/par,
-               fn = reduce_fn,
-            }
-         )
-      }
-   else
-      -- just reduce_seq
-      return R.connect{
-         input = in_rate,
-         toModule = R.HS(
-            R.modules.reduceSeq{
-               V = max_reduce/par,
-               fn = reduce_fn,
-            }
-         )
-      }
-   end
+   assert(false)
 end
 
 function reduce_rate.map_x(m, util)
-   print(inspect(m.size))
    local w = m.size[1]
    local h = m.size[2]
 
@@ -518,77 +474,34 @@ function reduce_rate.trunc(m, util)
    return m
 end
 
-function reduce_rate.pad(m, util)
-   local input
-   if DONT then
-      input = m.inputs[1]
-   else
-      input = reduce_rate(m.inputs[1], util)
-   end
-   local m = base(m.fn)
+function reduce_rate.pad_x(m, util)
+   local in_size = { m.type_in.w, m.type_in.h }
+   local par = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
 
-   local t = m.inputType
-   local w = m.width
-   local h = m.height
-   local out_size = m.outputType.size
+   local input = IR.input(m.type_in)
+   local in_rate = IR.apply(IR.partition({ par, 1 }), input)
 
-   local max_reduce = w*h
-   local par = math.ceil(max_reduce * util[1]/util[2])
-   par = divisor(max_reduce, par)
+   local new_m = IR.pad_t(m.left, m.right, m.top, m.bottom)
+   local inter = IR.apply(new_m, in_rate)
 
-   local in_rate = change_rate(input, { par, 1 })
+   local out_rate = IR.apply(IR.flatten({ par, 1 }), inter)
 
-   local m = R.modules.padSeq{
-      type = m.type,
-      V = par,
-      size = { w, h },
-      pad = { m.L, m.R, m.Top, m.B },
-      value = m.value
-   }
-
-   local inter = R.connect{
-      input = in_rate,
-      toModule = R.HS(m)
-   }
-
-   return change_rate(inter, out_size)
+   return IR.lambda(out_rate, input)
 end
 
-function reduce_rate.crop(m, util)
-   local input
-   if DONT then
-      input = m.inputs[1]
-   else
-      input = reduce_rate(m.inputs[1], util)
-   end
+function reduce_rate.crop_x(m, util)
+   local in_size = { m.type_in.w, m.type_in.h }
+   local par = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
 
-   -- @todo: double check implementation
-   local m = base(m.fn)
+   local input = IR.input(m.type_in)
+   local in_rate = IR.apply(IR.partition({ par, 1 }), input)
 
-   local t = m.inputType
-   local w = m.width
-   local h = m.height
-   local out_size = m.outputType.size
+   local new_m = IR.crop_t(m.left, m.right, m.top, m.bottom)
+   local inter = IR.apply(new_m, in_rate)
 
-   local max_reduce = w*h
-   local par = math.ceil(max_reduce * util[1]/util[2])
-   par = divisor(max_reduce, par)
+   local out_rate = IR.apply(IR.flatten({ par, 1 }), inter)
 
-   local in_rate = change_rate(input, { par, 1 })
-
-   m = R.modules.cropSeq{
-      type = m.type,
-      V = par,
-      size = { w, h },
-      crop = { m.L, m.R, m.Top, m.B }
-   }
-
-   local inter = R.connect{
-      input = in_rate,
-      toModule = R.HS(m)
-   }
-
-   return change_rate(inter, out_size)
+   return IR.lambda(out_rate, input)
 end
 
 function reduce_rate.upsample_x(m, util)
@@ -647,126 +560,19 @@ function reduce_rate.downsample_x(m, util)
    return IR.lambda(out_rate, input)
 end
 
-function reduce_rate.SSR(m, util)
-   log.warn('passthrough')
-   local input
-   if DONT then
-      input = m.inputs[1]
-   else
-      input = reduce_rate(m.inputs[1], util)
-   end
+function reduce_rate.stencil_x(m, util)
+   local in_size = { m.type_in.w, m.type_in.h }
+   local par = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
 
-   local m = base(m.fn)
+   local input = IR.input(m.type_in)
+   local in_rate = IR.apply(IR.partition({ par, 1 }), input)
 
-   return R.connect{
-      input = input,
-      toModule = R.HS(m)
-   }
-end
+   local new_m = IR.stencil_x(m.offset_x, m.offset_y, m.extent_x, m.extent_y)
+   local inter = IR.apply(IR.map_t(new_m, in_size), in_rate)
 
-function reduce_rate.unpackStencil(m, util)
-   log.warn('passthrough')
-   local input
-   if DONT then
-      input = m.inputs[1]
-   else
-      input = reduce_rate(m.inputs[1], util)
-   end
+   local out_rate = IR.apply(IR.flatten({ par, 1 }), inter)
 
-   local m = base(m.fn)
-
-   return R.connect{
-      input = input,
-      toModule = R.HS(m)
-   }
-end
-
-function reduce_rate.stencil(m, util)
-   local input
-   if DONT then
-      input = m.inputs[1]
-   else
-      input = reduce_rate(m.inputs[1], util)
-   end
-
-   local m = base(m.fn)
-
-   -- @todo: hack, should move this to translate probably
-   -- @todo: total hack, needs extra pad and crop
-   log.warn('@todo: fixme')
-   m.xmin = m.xmin - m.xmax
-   m.xmax = 0
-   m.ymin = m.ymin - m.ymax
-   m.ymax = 0
-
-   local size = { m.w, m.h }
-
-   local par = math.ceil(size[1]*size[2] * util[1]/util[2])
-   par = divisor(m.w, par)
-
-   log.debug(m.w, m.h)
-   log.debug(par)
-   log.debug(util[1], util[2])
-
-   local in_size = { m.w, m.h }
-   local st_size = { m.xmax - m.xmin + 1, m.ymax - m.ymin + 1} -- stencil size
-   local par_outer = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
-   local temp = (par_outer*util[2]) / (in_size[1]*size[2])
-   local par_inner = math.ceil(st_size[1]*st_size[2] / temp)
-
-   local m = R.modules.linebuffer{
-      type = m.inputType.over,
-      V = par,
-      size = size,
-      stencil = { m.xmin, m.xmax, m.ymin, m.ymax }
-   }
-
-   local in_rate = change_rate(input, { par, 1 })
-
-   local inter = R.connect{
-      input = in_rate,
-      toModule = R.HS(m)
-   }
-
-   log.debug('par_outer: ' .. inspect(par_outer))
-   log.debug('par_inner: ' .. inspect(par_inner))
-
-   if par_outer == 1 then
-      -- a reduced rate stencil should be a linebuffer that feeds into a changerate
-      -- e.g. linebuffer creates uint[4,4] -> changeRate creates uint[1,1]
-      -- since we need the output type of the stencil to match the boundary type specified
-      -- before, this means we would create something like this:
-      -- linebuffer -> seralize -> vectorize
-      -- where the seralize and the vectorize end up cancelling out.
-      -- this means that the changeRate needs to come from the module that takes the
-      -- linebuffer output as input
-      inter = R.connect{
-         input = inter,
-         toModule = R.HS(
-            C.cast(
-               base(inter.fn).outputType,
-               base(inter.fn).outputType.over
-            )
-         )
-      }
-
-      inter = change_rate(inter, { par_inner, 1 })
-      inter = change_rate(inter, st_size)
-
-      inter = R.connect{
-         input = inter,
-         toModule = R.HS(
-            C.cast(
-               base(inter.fn).outputType,
-               R.array2d(base(inter.fn).outputType, 1, 1)
-            )
-         )
-      }
-
-      -- wait a minute...
-   end
-
-   return change_rate(inter, size)
+   return IR.lambda(out_rate, input)
 end
 
 function reduce_rate.packTuple(m, util)

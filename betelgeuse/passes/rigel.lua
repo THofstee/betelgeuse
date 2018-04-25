@@ -105,10 +105,13 @@ local translate_mt = {
 setmetatable(translate, translate_mt)
 
 function translate.bit(t, hs)
+   local n = math.ceil(t.n/8)*8
+   assert(n > 0, "0 bit type?")
+
    if hs then
-      return R.HS(rtypes.int(math.ceil(t.n/8)*8))
+      return R.HS(rtypes.int(n))
    else
-      return rtypes.int(math.ceil(t.n/8)*8)
+      return rtypes.int(n)
    end
 end
 
@@ -393,6 +396,23 @@ function translate.downsample_t(m, hs)
    end
 end
 
+function translate.stencil_x(m, hs)
+   local par = 1 -- @todo: this is wrong, needs original image size
+   local new_m = R.modules.linebuffer{
+      type = translate(m.type_in.t, false),
+      V = par,
+      -- size = { m.type_in.w, m.type_in.h }, -- @todo: this is wrong, needs original image size
+      size = { 1920, 1080 }, -- @todo: this is wrong, needs original image size
+      stencil = { -m.extent_x+1, 0, -m.extent_y+1, 0 } -- @todo: total hack
+   }
+
+   -- print(inspect(m, {depth = 2}))
+   -- print(inspect(new_m, {depth = 2}))
+   -- assert(false)
+
+   return new_m
+end
+
 function translate.map_x(m, hs)
    -- @todo: the translated module is handshaked, but we only want to handshake around the map instead of the internal modules too...
    -- print(inspect(translate(m.m), {depth = 2}))
@@ -433,6 +453,15 @@ function translate.map_t(m, hs)
    -- }
 end
 
+function translate.reduce_x(m, hs)
+   local new_m = R.modules.reduce{
+      fn = translate(m.m, false),
+      size = m.size, -- @todo: this is wrong, needs to be parallel reduce size not input element size
+   }
+
+   if hs then return R.HS(new_m) else return new_m end
+end
+
 function translate.partition(m, hs)
    -- @todo: this is weird
    return change_rate(translate(m.type_in, false), m.counts)
@@ -463,6 +492,7 @@ function translate.apply(x, hs)
 end
 
 function translate.select(x, hs)
+   local v = translate(x.v, hs)
    return R.selectStream{
       input = translate(x.v, hs).inputs[1],
       index = x.n - 1,
@@ -472,6 +502,7 @@ end
 function translate.concat(x, hs)
    local translated = {}
    for i,v in ipairs(x.vs) do
+      print(inspect(v, {depth = 2}))
       translated[i] = translate(v, hs)
    end
 

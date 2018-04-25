@@ -19,8 +19,10 @@ local function fuse(m)
                return fuse(cur)
             elseif cur.kind == 'map_t' or cur.kind == 'map_x' then
                return I[cur.kind](helper2(cur.m), cur.size)
+            elseif cur.kind == 'reduce_t' or cur.kind == 'reduce_x' then
+               return I[cur.kind](helper2(cur.m), cur.size)
             else
-               assert(false, cur.kind)
+               return cur
             end
          end
 
@@ -34,11 +36,22 @@ local function fuse(m)
          for i,v in ipairs(cur.vs) do
             inputs[i] = helper(v)
          end
-         return I.concat(unpack(inputs))
+
+         for _,v in ipairs(inputs) do
+            print("aeiou", inspect(v, {depth = 2}))
+            if v.kind ~= 'select' then
+               return I.concat(unpack(inputs))
+            end
+         end
+
+         return inputs[1].v
       elseif cur.kind == 'select' then
          local input = helper(cur.v)
-         assert(input.kind == 'concat')
-         return input.vs[cur.n]
+         if input.kind == 'concat' then
+            return input.vs[cur.n]
+         end
+
+         return I.select(input, cur.n)
       elseif cur.kind == 'const' then
          return cur
       else

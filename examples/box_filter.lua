@@ -4,7 +4,7 @@ local R = require 'rigelSimple'
 local G = require 'graphview'
 
 -- parse command line args
-local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 1 }
+local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 2 }
 
 -- box filter
 -- local im_size = { 32, 32 }
@@ -23,6 +23,8 @@ local mod = L.lambda(m, I)
 
 G(mod)
 
+local util = P.reduction_factor(mod, rate)
+G(P.transform(P.translate(mod), util))
 -- optimize
 local res = P.opt(mod, rate)
 G(res)
@@ -30,6 +32,17 @@ G(res)
 -- translate to rigel and run
 local r,s = P.rigel(res)
 G(r)
+
+-- local D = require 'dump'
+-- local function write_to_file(filename, str)
+--    local f = assert(io.open(filename, "w"))
+--    f:write(str)
+--    f:close()
+-- end
+-- write_to_file("dbg/dump-ir.lua", D(res))
+-- write_to_file("dbg/dump-rigel.lua", D(r))
+-- G(assert(loadstring(D(r)))())
+
 s("1080p.raw")
 
 -- return the unoptimized module

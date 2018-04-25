@@ -44,8 +44,8 @@ function P.opt(mod, rate)
    res = P.transform(res, util)
    res = P.fuse_reshape(res)
    res = P.fuse_map(res)
-   res = P.fuse_concat(res)
    res = P.peephole(res)
+   res = P.fuse_concat(res)
 
    return res
 end

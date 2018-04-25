@@ -244,11 +244,11 @@ function translate.reduce(m)
 end
 
 function translate.pad(m)
-   return I.pad_t(m.left, m.right, m.top, m.bottom)
+   return I.pad_x(m.left, m.right, m.top, m.bottom)
 end
 
 function translate.crop(m)
-   return I.crop_t(m.left, m.right, m.top, m.bottom)
+   return I.crop_x(m.left, m.right, m.top, m.bottom)
 end
 
 function translate.upsample(m)

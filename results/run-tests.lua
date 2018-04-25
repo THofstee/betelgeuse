@@ -19,7 +19,7 @@ lfs.chdir('examples')
 
 local examples = {
    'updown',     -- upsample -> downsample
-   -- 'box_filter', -- like a convolution but no weights
+   'box_filter', -- like a convolution but no weights
    -- 'conv2',      -- convolution
    -- 'strided',    -- strided convolution
    -- 'twopass',    -- separable convolution

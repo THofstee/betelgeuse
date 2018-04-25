@@ -79,15 +79,35 @@ local function graph_view(l)
       return 'crop' .. '\\n' .. '{' .. m.left .. ',' .. m.right .. ',' .. m.bottom .. ',' .. m.top .. '}'
    end
 
-   function info.reduce(m)
-      return 'reduce' .. '(' .. info(m.m) .. ')'
+   function info.reduce_x(m)
+      if m.m.kind == 'lambda' then
+         a(m.m)
+      end
+
+      return 'reduce_x' .. '(' .. info(m.m) .. ')'
+   end
+
+   function info.reduce_t(m)
+      if m.m.kind == 'lambda' then
+         a(m.m)
+      end
+
+      return 'reduce_t' .. '(' .. info(m.m) .. ')'
    end
 
    function info.map_t(m)
+      if m.m.kind == 'lambda' then
+         a(m.m)
+      end
+
       return 'map_t' .. '(' .. info(m.m) .. ')'
    end
 
    function info.map_x(m)
+      if m.m.kind == 'lambda' then
+         a(m.m)
+      end
+
       return 'map_x' .. '(' .. info(m.m) .. ')'
    end
 

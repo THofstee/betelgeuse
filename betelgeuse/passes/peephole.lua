@@ -33,8 +33,10 @@ local function skeleton(m)
                return skeleton(cur)
             elseif cur.kind == 'map_t' or cur.kind == 'map_x' then
                return I[cur.kind](helper2(cur.m), cur.size)
+            elseif cur.kind == 'reduce_t' or cur.kind == 'reduce_x' then
+               return I[cur.kind](helper2(cur.m), cur.size)
             else
-               assert(false, cur.kind)
+               return cur
             end
          end
 

@@ -219,6 +219,31 @@ dump["C.flatten2"] = function(m)
    assert(false)
 end
 
+dump["C.stencilLinebuffer"] = function(m)
+   local A = dump(m.inputType.over)
+   local W = m.name:match("_w(%d+)_")
+   local H = m.name:match("_h(%d+)_")
+   local T = m.name:match("_T(%d+)_")
+   local x0 = m.name:match("xmin(%d+)_")
+   local x1 = 0
+   local y0 = m.name:match("ymin(%d+)")
+   local y1 = 0
+
+   local str = "C.stencilLinebuffer(%s, %s, %s, %s, -%s, %s, -%s, %s)"
+   s[#s+1] = newvar(m, str:format(A, W, H, T, x0, x1, y0, y1))
+end
+
+dump["C.unpackStencil"] = function(m)
+   local A = dump(m.inputType.over)
+   local stencilWidth = m.stencilW -- @todo: unsure
+   local stencilHeight = m.stencilH -- @todo: unsure
+   local width = m.name:match("W(%d+)_") -- @todo: unsure
+   local height = m.name:match("H(%d+)_") -- @todo: unsure
+
+   local str = "C.unpackStencil(%s, %s, %s, 1)"
+   s[#s+1] = newvar(m, str:format(A, stencilWidth, stencilHeight, width, height))
+end
+
 function dump.index(m)
    print(inspect(m, {depth = 2}))
    assert(false)
@@ -235,6 +260,12 @@ function dump.map(m)
    s[#s+1] = newvar(m,
                     string.format("R.modules.map{ fn = %s, size = { %s, %s } }",
                                   ids[m.fn], m.W, m.H))
+end
+
+function dump.reduce(m)
+   dump(m.fn)
+   local str = "R.modules.reduce{ fn = %s, size = { %s, %s } }"
+   s[#s+1] = newvar(m, str:format(ids[m.fn], m.W, m.H))
 end
 
 function dump.makeHandshake(m)
