@@ -8,7 +8,8 @@ local function serialize(results)
             example = prog,
             rate = rate,
             cycles = perf.cycles or 0,
-            area = perf.area or 0,
+            luts = perf.luts or 0,
+            ffs = perf.ffs or 0,
             rams = perf.rams or 0,
             correct = perf.correct,
          }
@@ -38,7 +39,8 @@ local function serialize(results)
          t2[i] = { 
             example = v.example, 
             base_cycles = 0,
-            base_area = 0,
+            base_luts = 0,
+            base_ffs = 0,
             base_rams = 0,
             tests = {},
          }
@@ -46,7 +48,8 @@ local function serialize(results)
 
       if v.rate[1] * v.rate[2] == 1 then
          t2[i].base_cycles = v.cycles
-         t2[i].base_area = v.area
+         t2[i].base_luts = v.luts
+         t2[i].base_ffs = v.ffs
          t2[i].base_rams = v.rams
       end
       table.insert(t2[i].tests, v)
@@ -58,8 +61,10 @@ local function serialize(results)
    s = s .. 'rate' .. ','
    s = s .. 'cycles' .. ','
    s = s .. 'cycles relative 1/1' .. ','
-   s = s .. 'area' .. ','
-   s = s .. 'area relative 1/1' .. ','
+   s = s .. 'luts' .. ','
+   s = s .. 'luts relative 1/1' .. ','
+   s = s .. 'ffs' .. ','
+   s = s .. 'ffs relative 1/1' .. ','
    s = s .. 'rams' .. ','
    s = s .. 'rams relative 1/1' .. ','
    s = s .. 'correct' .. '\n'
@@ -70,8 +75,10 @@ local function serialize(results)
          s = s .. test.rate[1] .. '/' .. test.rate[2] .. ','
          s = s .. test.cycles .. ','
          s = s .. string.format("%.2f", test.cycles/example.base_cycles) .. ','
-         s = s .. test.area .. ','
-         s = s .. string.format("%.2f", test.area/example.base_area) .. ','
+         s = s .. test.luts .. ','
+         s = s .. string.format("%.2f", test.luts/example.base_luts) .. ','
+         s = s .. test.ffs .. ','
+         s = s .. string.format("%.2f", test.ffs/example.base_ffs) .. ','
          s = s .. test.rams .. ','
          s = s .. string.format("%.2f", test.rams/example.base_rams) .. ','
          s = s .. tostring(test.correct or false) .. '\n'

@@ -9,7 +9,7 @@ G.render = false
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'verilator'
+local mode = 'axi'
 local clean_after_test = false
 
 local lfs = require 'lfs'
@@ -77,7 +77,7 @@ for _,example in ipairs(examples) do
       -- { 1, 16 },
       -- { 1,  8 },
       -- { 1,  4 },
-      { 1,  2 },
+      -- { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
@@ -160,14 +160,28 @@ for _,example in ipairs(examples) do
          local s = assert(f:read('*a'))
          f:close()
 
-         -- get area
-         -- @todo: use utilization_h.txt instead and do more advanced parsiing for better area estimates
-         local f = io.open('out/' .. filename .. '_zynq20vivado/utilization.txt')
+         -- get area       
+         -- local f = io.open('out/' .. filename .. '_zynq20vivado/utilization.txt')
+         -- local s = f:read('*a')
+         -- f:close()
+
+         -- res.rams = string.match(s, "Block RAM Tile.-(%d+).-\n")
+         -- res.area = string.match(s, "%| Slice.-(%d+).-\n")
+
+         local f = io.open('out/' .. filename .. '_zynq20vivado/utilization_h.txt')
          local s = f:read('*a')
          f:close()
 
-         res.rams = string.match(s, "Block RAM Tile.-(%d+).-\n")
-         res.area = string.match(s, "%| Slice.-(%d+).-\n")
+         local matchstr = "|%s*HarnessHSFN%s*|%s*(%w+)%s*|%s*(%d+)%s*|%s*(%d+)%s*|%s*(%d+)%s*|%s*(%d+)%s*|%s*(%d+)%s*|%s*(%d+)%s*|%s*(%d+)%s*|%s*(%d+)%s*"
+         local top, total_lut, logic_lut, lutram, srl, ff, ramb36, ramb18, dsp48 = s:match(matchstr)
+
+         res.luts = total_lut
+         res.ffs = ff
+         res.rams = ramb36
+
+         -- make sure we grabbed information about the right module in the hierarchy
+         local metadata = dofile('out/' .. filename .. '.metadata.lua')
+         assert(metadata.topModule == top)
 
          -- get cycles
          local f = io.open('out/' .. filename .. '.zynq20vivado.cycles.txt')
