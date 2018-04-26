@@ -28,6 +28,8 @@ local function fuse(m)
 
          if cur.m.kind == 'map_t' or cur.m.kind == 'map_x' then
             cur.m = helper2(cur.m)
+         elseif cur.m.kind == 'reduce_t' or cur.m.kind == 'reduce_x' then
+            cur.m = helper2(cur.m)
          end
 
          return I.apply(cur.m, input)

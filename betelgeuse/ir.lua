@@ -18,7 +18,7 @@ Value = input(Type t)
       | concat(Value* vs)
       | select(Value v, number n)
       | apply(Module m, Value v)
-      attributes(Type type)
+      attributes(Type type, Type perf)
 
 Module = add
        | sub
@@ -47,7 +47,7 @@ Module = add
        | repeat_x(number w, number h)
        | repeat_t(number w, number h)
        | lambda(Value f, input x)
-       attributes(function type_func)
+       attributes(function type_func, function perf_func)
 ]]
 
 --[[
@@ -77,31 +77,35 @@ IR.array2d = memoize(IR.array2d)
 --]]
 
 function IR.input(t)
-   return C.input(t, t)
+   return C.input(t, t, t)
 end
 
 function IR.const(t, v)
-   return C.const(t, v, t)
+   return C.const(t, v, t, t)
 end
 
 function IR.concat(...)
    local ts = {}
+   local ps = {}
    for i,v in ipairs({...}) do
       ts[i] = v.type
+      ps[i] = v.perf
    end
 
-   return C.concat(List{...}, IR.tuple(ts))
+   return C.concat(List{...}, IR.tuple(ts), IR.tuple(ps))
 end
 
 function IR.select(v, n)
    assert(v.type.kind == 'tuple', "select only works on tuples")
-   return C.select(v, n, v.type.ts[n])
+   return C.select(v, n, v.type.ts[n], v.perf.ts[n])
 end
 
 function IR.apply(m, v)
    m.type_in = v.type
    m.type_out = m.type_func(v.type)
-   return C.apply(m, v, m.type_out)
+   m.perf_in = v.perf
+   m.perf_out = m.perf_func(v.perf)
+   return C.apply(m, v, m.type_out, m.perf_out)
 end
 
 --[[
@@ -119,19 +123,19 @@ end
 --]]
 
 function IR.add()
-   return C.add(binop_type_func)
+   return C.add(binop_type_func, binop_type_func)
 end
 
 function IR.sub()
-   return C.sub(binop_type_func)
+   return C.sub(binop_type_func, binop_type_func)
 end
 
 function IR.mul()
-   return C.mul(binop_type_func)
+   return C.mul(binop_type_func, binop_type_func)
 end
 
 function IR.div()
-   return C.div(binop_type_func)
+   return C.div(binop_type_func, binop_type_func)
 end
 
 function IR.shift(n)
@@ -140,7 +144,7 @@ function IR.shift(n)
       return t
    end
 
-   return C.shift(n, type_func)
+   return C.shift(n, type_func, type_func)
 end
 
 function IR.trunc(n)
@@ -148,7 +152,7 @@ function IR.trunc(n)
       return IR.bit(n)
    end
 
-   return C.trunc(n, type_func)
+   return C.trunc(n, type_func, type_func)
 end
 
 function IR.zip()
@@ -162,7 +166,17 @@ function IR.zip()
       return IR.array2d(L.tuple(types), w, h)
    end
 
-   return C.zip(type_func)
+   local function perf_func(t)
+      local w = t.ts[1].w
+      local h = t.ts[1].h
+      local perfs = {}
+      for i,t  in ipairs(t.ts) do
+         perfs[i] = t.t
+      end
+      return IR.array2d(L.tuple(perfs), w, h)
+   end
+
+   return C.zip(type_func, perf_func)
 end
 
 local size_mt = {
@@ -181,7 +195,11 @@ function IR.partition(n)
       return IR.array2d(IR.array2d(t.t, n[1], n[2]), t.w/n[1], t.h/n[2])
    end
 
-   return C.partition(setmetatable(n, size_mt), type_func)
+   local function perf_func(t)
+      return IR.array2d(IR.array2d(t.t, n[1], n[2]), t.w/n[1], t.h/n[2])
+   end
+
+   return C.partition(setmetatable(n, size_mt), type_func, perf_func)
 end
 
 function IR.flatten(n)
@@ -190,7 +208,11 @@ function IR.flatten(n)
       return IR.array2d(t.t.t, t.w*t.t.w, t.h*t.t.h)
    end
 
-   return C.flatten(setmetatable(n, size_mt), type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t.t, t.w*t.t.w, t.h*t.t.h)
+   end
+
+   return C.flatten(setmetatable(n, size_mt), type_func, perf_func)
 end
 
 function IR.map_x(f, n)
@@ -200,7 +222,13 @@ function IR.map_x(f, n)
       return IR.array2d(f.type_func(t.t), t.w, t.h)
    end
 
-   local res = C.map_x(f, n, type_func)
+   local function perf_func(t)
+      -- @todo: should this be t.w and t.h or should it just be n?
+      -- @todo: does map_x go from A[w,h] -> B[w,h] in chunks of n, or just from A[n] -> B[n]?
+      return IR.array2d(f.type_func(t.t), t.w, t.h)
+   end
+
+   local res = C.map_x(f, n, type_func, perf_func)
 
    -- propagate applied types through the modules
    local mt = getmetatable(res)
@@ -223,7 +251,13 @@ function IR.map_t(f, n)
       return IR.array2d(f.type_func(t.t), t.w, t.h)
    end
 
-   local res = C.map_t(f, n, type_func)
+   local function perf_func(t)
+      -- @todo: should this be t.w and t.h or should it just be n?
+      -- @todo: does map_x go from A[w,h] -> B[w,h] in chunks of n, or just from A[n] -> B[n]?
+      return IR.array2d(f.type_func(t.t), t.w, t.h)
+   end
+
+   local res = C.map_t(f, n, type_func, perf_func)
 
    -- propagate applied types through the modules
    local mt = getmetatable(res)
@@ -246,11 +280,29 @@ function IR.reduce_x(f, n)
       return t.t
    end
 
-   return C.reduce_x(f, n, type_func)
+   local function perf_func(t)
+      -- @todo: is this right?
+      -- @todo: i think the type already got expanded further up...
+      return t.t
+   end
+
+   return C.reduce_x(f, n, type_func, perf_func)
 end
 
 function IR.reduce_t(f, n)
-   return C.reduce_t(f, n)
+   local function type_func(t)
+      -- @todo: is this right?
+      -- @todo: i think the type already got expanded further up...
+      return t.t
+   end
+
+   local function perf_func(t)
+      -- @todo: is this right?
+      -- @todo: i think the type already got expanded further up...
+      return t.t
+   end
+
+   return C.reduce_t(f, n, type_func, perf_func)
 end
 
 function IR.stencil_x(x0, y0, x1, y1)
@@ -258,7 +310,11 @@ function IR.stencil_x(x0, y0, x1, y1)
       return IR.array2d(IR.array2d(t.t, x1, y1), t.w, t.h)
    end
 
-   return C.stencil_x(x0, y0, x1, y1, type_func)
+   local function perf_func(t)
+      return IR.array2d(IR.array2d(t.t, x1, y1), t.w, t.h)
+   end
+
+   return C.stencil_x(x0, y0, x1, y1, type_func, perf_func)
 end
 
 function IR.stencil_t(x0, y0, x1, y1)
@@ -266,7 +322,11 @@ function IR.stencil_t(x0, y0, x1, y1)
       return IR.array2d(IR.array2d(t.t, x1, y1), t.w, t.h)
    end
 
-   return C.stencil_t(x0, y0, x1, y1, type_func)
+   local function perf_func(t)
+      return IR.array2d(IR.array2d(t.t, x1, y1), t.w, t.h)
+   end
+
+   return C.stencil_t(x0, y0, x1, y1, type_func, perf_func)
 end
 
 function IR.pad_x(l, r, u, d)
@@ -274,7 +334,11 @@ function IR.pad_x(l, r, u, d)
       return IR.array2d(t.t, t.w+l+r, t.h+u+d)
    end
 
-   return C.pad_x(l, r, u, d, type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t, t.w+l+r, t.h+u+d)
+   end
+
+   return C.pad_x(l, r, u, d, type_func, perf_func)
 end
 
 function IR.pad_t(l, r, u, d)
@@ -282,7 +346,11 @@ function IR.pad_t(l, r, u, d)
       return IR.array2d(t.t, t.w+l+r, t.h+u+d)
    end
 
-   return C.pad_t(l, r, u, d, type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t, t.w+l+r, t.h+u+d)
+   end
+
+   return C.pad_t(l, r, u, d, type_func, perf_func)
 end
 
 function IR.crop_x(l, r, u, d)
@@ -290,7 +358,11 @@ function IR.crop_x(l, r, u, d)
       return IR.array2d(t.t, t.w-l-r, t.h-u-d)
    end
 
-   return C.crop_x(l, r, u, d, type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t, t.w-l-r, t.h-u-d)
+   end
+
+   return C.crop_x(l, r, u, d, type_func, perf_func)
 end
 
 function IR.crop_t(l, r, u, d)
@@ -298,7 +370,11 @@ function IR.crop_t(l, r, u, d)
       return IR.array2d(t.t, t.w-l-r, t.h-u-d)
    end
 
-   return C.crop_t(l, r, u, d, type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t, t.w-l-r, t.h-u-d)
+   end
+
+   return C.crop_t(l, r, u, d, type_func, perf_func)
 end
 
 function IR.upsample_x(x, y)
@@ -306,7 +382,11 @@ function IR.upsample_x(x, y)
       return IR.array2d(t.t, t.w*x, t.h*y)
    end
 
-   return C.upsample_x(x, y, type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t, t.w*x, t.h*y)
+   end
+
+   return C.upsample_x(x, y, type_func, perf_func)
 end
 
 -- @todo: cyc should maybe be number of elements taken per cycle instead of number of cycles per element...?
@@ -318,7 +398,11 @@ function IR.upsample_t(x, y, cyc)
       return IR.array2d(t.t, t.w*x, t.h*y)
    end
 
-   return C.upsample_t(x, y, cyc, type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t, t.w*x, t.h*y)
+   end
+
+   return C.upsample_t(x, y, cyc, type_func, perf_func)
 end
 
 function IR.downsample_x(x, y)
@@ -326,7 +410,11 @@ function IR.downsample_x(x, y)
       return IR.array2d(t.t, t.w/x, t.h/y)
    end
 
-   return C.downsample_x(x, y, type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t, t.w/x, t.h/y)
+   end
+
+   return C.downsample_x(x, y, type_func, perf_func)
 end
 
 function IR.downsample_t(x, y, cyc)
@@ -334,7 +422,11 @@ function IR.downsample_t(x, y, cyc)
       return IR.array2d(t.t, t.w/x, t.h/y)
    end
 
-   return C.downsample_t(x, y, cyc, type_func)
+   local function perf_func(t)
+      return IR.array2d(t.t, t.w/x, t.h/y)
+   end
+
+   return C.downsample_t(x, y, cyc, type_func, perf_func)
 end
 
 function IR.repeat_x(w, h)
@@ -351,7 +443,12 @@ function IR.lambda(f, x)
       return f.type
    end
 
-   return C.lambda(f, x, type_func)
+   local function perf_func(t)
+      assert(t == x.perf, string.format('Perf of input (%s) does not match expected type (%s)', t, x.perf))
+      return f.perf
+   end
+
+   return C.lambda(f, x, type_func, perf_func)
 end
 
 return IR

@@ -15,6 +15,7 @@ local RM = require 'modules'
 local C = require 'examplescommon'
 local rtypes = require 'types'
 local L = require 'betelgeuse.lang'
+local dump = require 'dump'
 
 -- @todo: remove this after debugging
 local inspect = require 'inspect'
@@ -34,6 +35,7 @@ P.fuse_reshape = require 'betelgeuse.passes.fuse_reshape'
 P.fuse_map = require 'betelgeuse.passes.fuse_map'
 P.fuse_concat = require 'betelgeuse.passes.fuse_concat'
 P.peephole = require 'betelgeuse.passes.peephole'
+P.remove_lambda = require 'betelgeuse.passes.remove_lambda'
 P.rigel = require 'betelgeuse.passes.rigel'
 
 function P.opt(mod, rate)
@@ -42,10 +44,16 @@ function P.opt(mod, rate)
    local res
    res = P.translate(mod)
    res = P.transform(res, util)
-   res = P.fuse_reshape(res)
-   res = P.fuse_map(res)
-   res = P.peephole(res)
-   res = P.fuse_concat(res)
+
+   local prev
+   repeat
+      prev = dump(res)
+      res = P.fuse_reshape(res)
+      res = P.fuse_map(res)
+      res = P.peephole(res)
+      res = P.fuse_concat(res)
+      res = P.remove_lambda(res)
+   until dump(res) == prev
 
    return res
 end

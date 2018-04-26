@@ -11,14 +11,15 @@ local rate = { tonumber(arg[1]) or 1, tonumber(arg[2]) or 2 }
 local im_size = { 1920, 1080 }
 local I = L.input(L.array2d(L.fixed(9, 0), im_size[1], im_size[2]))
 -- local pad = L.pad(8, 8, 2, 1)(I)
-local pad = L.pad(0, 0, 0, 0)(I)
-local st = L.stencil(-1, -1, 4, 4)(pad)
+-- local pad = L.pad(0, 0, 0, 0)(I)
+local pad = I
+local st = L.stencil(0, 0, 4, 4)(pad)
 local conv = L.map(L.reduce(L.add(true)))
 local m = conv(st)
 local m = L.map(L.shift(4, true))(m)
 local m = L.map(L.trunc(8, 0))(m)
 -- local m = L.crop(8, 8, 2, 1)(m)
-local m = L.crop(0, 0, 0, 0)(m)
+-- local m = L.crop(0, 0, 0, 0)(m)
 local mod = L.lambda(m, I)
 
 G(mod)
@@ -33,15 +34,15 @@ G(res)
 local r,s = P.rigel(res)
 G(r)
 
--- local D = require 'dump'
--- local function write_to_file(filename, str)
---    local f = assert(io.open(filename, "w"))
---    f:write(str)
---    f:close()
--- end
--- write_to_file("dbg/dump-ir.lua", D(res))
--- write_to_file("dbg/dump-rigel.lua", D(r))
--- G(assert(loadstring(D(r)))())
+local D = require 'dump'
+local function write_to_file(filename, str)
+   local f = assert(io.open(filename, "w"))
+   f:write(str)
+   f:close()
+end
+write_to_file("dbg/dump-ir.lua", D(res))
+write_to_file("dbg/dump-rigel.lua", D(r))
+G(assert(loadstring(D(r)))())
 
 s("1080p.raw")
 

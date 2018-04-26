@@ -237,13 +237,20 @@ function reduce_rate.reduce_x(m, util)
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
 
+   local new_h = math.ceil(h/par)
+   par = par/(h/new_h)
+   local new_w = math.ceil(w/par)
+   par = par/(w/new_w)
+
    local input = IR.input(m.type_in)
-   local in_rate = IR.apply(IR.partition({ par, 1 }), input)
+   local in_rate = IR.apply(IR.partition({ new_w, new_h }), input)
 
-   print(inspect(m, {depth = 2}))
-   print(inspect(util))
+   local out_w = in_rate.type.w
+   local out_h = in_rate.type.h
+   local inter = IR.apply(IR.map_t(IR.reduce_x(m.m, { new_w, new_h }), { out_w, out_h }), in_rate)
+   local inter2 = IR.apply(IR.reduce_t(m.m, { out_w, out_h }), inter)
 
-   assert(false)
+   return IR.lambda(inter2, input)
 end
 
 function reduce_rate.map_x(m, util)
@@ -561,18 +568,33 @@ function reduce_rate.downsample_x(m, util)
 end
 
 function reduce_rate.stencil_x(m, util)
+   -- @todo: needs to handle reducing to stencil_t
    local in_size = { m.type_in.w, m.type_in.h }
+   local max_reduce = in_size[1]*in_size[2]
    local par = math.ceil(in_size[1]*in_size[2] * util[1]/util[2])
 
-   local input = IR.input(m.type_in)
-   local in_rate = IR.apply(IR.partition({ par, 1 }), input)
+   local remain = util[1]*util[2] * (par / (in_size[1]*in_size[2]))
+   if remain == 1 then
+      local input = IR.input(m.type_in)
+      local in_rate = IR.apply(IR.partition({ par, 1 }), input)
 
-   local new_m = IR.stencil_x(m.offset_x, m.offset_y, m.extent_x, m.extent_y)
-   local inter = IR.apply(IR.map_t(new_m, in_size), in_rate)
+      local new_m = IR.stencil_x(m.offset_x, m.offset_y, m.extent_x, m.extent_y)
+      local inter = IR.apply(IR.map_t(new_m, in_size), in_rate)
 
-   local out_rate = IR.apply(IR.flatten({ par, 1 }), inter)
+      local out_rate = IR.apply(IR.flatten({ par, 1 }), inter)
 
-   return IR.lambda(out_rate, input)
+      return IR.lambda(out_rate, input)
+   else
+      local input = IR.input(m.type_in)
+      local in_rate = IR.apply(IR.partition({ par, 1 }), input)
+
+      local new_m = IR.stencil_t(m.offset_x, m.offset_y, m.extent_x, m.extent_y)
+      local inter = IR.apply(IR.map_t(new_m, in_size), in_rate)
+
+      local out_rate = IR.apply(IR.flatten({ par, 1 }), inter)
+
+      return IR.lambda(out_rate, input)
+   end
 end
 
 function reduce_rate.packTuple(m, util)

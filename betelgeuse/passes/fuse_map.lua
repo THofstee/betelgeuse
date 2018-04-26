@@ -1,6 +1,7 @@
 local I = require 'betelgeuse.ir'
 local inspect = require 'inspect'
 local inline = require 'betelgeuse.passes.inline'
+local memoize = require 'memoize'
 
 local function merge(cur, input)
    if cur.m.kind == 'map_t' then
@@ -25,7 +26,7 @@ local function merge(cur, input)
    return I.apply(cur.m, input)
 end
 
-local function fuse(m)
+local function skeleton(m)
    local input = m.x
 
    local function helper(cur)
@@ -35,6 +36,25 @@ local function fuse(m)
          return input
       elseif cur.kind == 'apply' then
          local input = helper(cur.v)
+
+         local function helper2(cur)
+            if cur.kind == 'lambda' then
+               return skeleton(cur)
+            elseif cur.kind == 'map_t' or cur.kind == 'map_x' then
+               return I[cur.kind](helper2(cur.m), cur.size)
+            elseif cur.kind == 'reduce_t' or cur.kind == 'reduce_x' then
+               return I[cur.kind](helper2(cur.m), cur.size)
+            else
+               return cur
+            end
+         end
+
+         if cur.m.kind == 'map_t' or cur.m.kind == 'map_x' then
+            cur.m = helper2(cur.m)
+         elseif cur.m.kind == 'reduce_t' or cur.m.kind == 'reduce_x' then
+            cur.m = helper2(cur.m)
+         end
+
          return merge(cur, input)
       elseif cur.kind == 'concat' then
          local inputs = {}
@@ -44,7 +64,7 @@ local function fuse(m)
          return I.concat(unpack(inputs))
       elseif cur.kind == 'select' then
          return I.select(helper(cur.v), cur.n)
-      elseif cur.kind == 'constant' then
+      elseif cur.kind == 'const' then
          return cur
       else
          assert(false, 'inline ' .. cur.kind .. ' not yet implemented')
@@ -53,5 +73,6 @@ local function fuse(m)
 
    return I.lambda(helper(m.f), m.x)
 end
+skeleton = memoize(skeleton)
 
-return fuse
+return skeleton

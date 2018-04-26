@@ -268,6 +268,12 @@ function dump.reduce(m)
    s[#s+1] = newvar(m, str:format(ids[m.fn], m.W, m.H))
 end
 
+function dump.reduceSeq(m)
+   dump(m.fn)
+   local str = "R.modules.reduceSeq{ fn = %s, V = %s }"
+   s[#s+1] = newvar(m, str:format(ids[m.fn], m.T))
+end
+
 function dump.makeHandshake(m)
    dump(m.fn)
    s[#s+1] = newvar(m, string.format("R.HS(%s)", ids[m.fn]))

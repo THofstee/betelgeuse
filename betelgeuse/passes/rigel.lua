@@ -453,7 +453,17 @@ function translate.map_t(m, hs)
    -- }
 end
 
+function translate.reduce_t(m, hs)
+   local new_m = R.modules.reduceSeq{
+      fn = translate(m.m, false),
+      V = 1,
+   }
+
+   if hs then return R.HS(new_m) else return new_m end
+end
+
 function translate.reduce_x(m, hs)
+   print(inspect(m.size))
    local new_m = R.modules.reduce{
       fn = translate(m.m, false),
       size = m.size, -- @todo: this is wrong, needs to be parallel reduce size not input element size
@@ -492,11 +502,18 @@ function translate.apply(x, hs)
 end
 
 function translate.select(x, hs)
-   local v = translate(x.v, hs)
-   return R.selectStream{
-      input = translate(x.v, hs).inputs[1],
-      index = x.n - 1,
-   }
+   if hs then
+      return R.selectStream{
+         input = translate(x.v, hs).inputs[1],
+         index = x.n - 1,
+      }
+   else
+      local v = translate(x.v, hs)
+      return R.connect{
+         input = v,
+         toModule = C.index(v.type, x.n-1)
+      }
+   end
 end
 
 function translate.concat(x, hs)
