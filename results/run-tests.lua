@@ -19,8 +19,8 @@ lfs.chdir('examples')
 
 local examples = {
    -- 'updown',     -- upsample -> downsample
-   'box_filter', -- like a convolution but no weights
-   -- 'conv2',      -- convolution
+   -- 'box_filter', -- like a convolution but no weights
+   'conv2',      -- convolution
    -- 'strided',    -- strided convolution
    -- 'twopass',    -- separable convolution
    -- 'unsharp',    -- unsharp mask
@@ -77,7 +77,7 @@ for _,example in ipairs(examples) do
       -- { 1, 16 },
       -- { 1,  8 },
       -- { 1,  4 },
-      { 1,  2 },
+      -- { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },

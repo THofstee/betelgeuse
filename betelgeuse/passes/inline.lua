@@ -16,7 +16,7 @@ local function inline(m, input)
          return I.concat(unpack(inputs))
       elseif cur.kind == 'select' then
          return I.select(helper(cur.v), cur.n)
-      elseif cur.kind == 'constant' then
+      elseif cur.kind == 'const' then
          return cur
       else
          assert(false, 'inline ' .. cur.kind .. ' not yet implemented')

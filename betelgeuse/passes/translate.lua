@@ -56,7 +56,12 @@ function translate.const(c)
          return v
       else
          -- shift constant left by fractional bits
-         return v * 2^c.type.f
+         local base = c.type
+         while base.t do
+            base = base.t
+         end
+
+         return v * 2^base.f
       end
    end
 
@@ -201,10 +206,7 @@ function translate.mul(m)
    local out_width = m.out_type.i + m.out_type.f
    local out_type = m.out_type
 
-   return R.modules.mult{
-      inType = translate(in_type),
-      outType = translate(out_type)
-   }
+   return I.mul()
 end
 
 function translate.div(m)
@@ -306,10 +308,7 @@ function translate.map(m)
 end
 
 function translate.zip(m)
-   return R.modules.SoAtoAoS{
-      type = translate(m.out_type.t).list,
-      size = { m.out_type.w, m.out_type.h }
-   }
+   return I.zip()
 end
 
 return translate

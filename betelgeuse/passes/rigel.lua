@@ -137,6 +137,17 @@ function translate.input(x, hs)
 end
 
 function translate.const(x, hs)
+   local function flatten(list)
+      if type(list) ~= "table" then return {list} end
+      local flat_list = {}
+      for _, elem in ipairs(list) do
+         for _, val in ipairs(flatten(elem)) do
+            flat_list[#flat_list + 1] = val
+         end
+      end
+      return flat_list
+   end
+
    if hs then
       -- print(inspect(x, {depth = 2}))
       -- return R.modules.constSeq{
@@ -147,7 +158,7 @@ function translate.const(x, hs)
       local m = R.modules.constSeq{
          type = R.array2d(translate(x.type, false), 1, 1),
          P = 1,
-         value = { x.v },
+         value = { flatten(x.v) },
       }
 
       local inter = R.connect{
@@ -166,6 +177,16 @@ end
 
 function translate.add(m, hs)
    local m = R.modules.sum{
+      inType = translate(m.type_in.ts[1], false),
+      outType = translate(m.type_out, false),
+      async = true
+   }
+
+   if hs then return R.HS(m) else return m end
+end
+
+function translate.mul(m, hs)
+   local m = R.modules.mult{
       inType = translate(m.type_in.ts[1], false),
       outType = translate(m.type_out, false),
       async = true
@@ -555,6 +576,15 @@ function translate.concat(x, hs)
       -- print(inspect(R.concat(translated), {depth = 2}))
       return R.concat(translated)
    end
+end
+
+function translate.zip(m, hs)
+   local new_m = R.modules.SoAtoAoS{
+      type = translate(m.type_out.t, false).list,
+      size = { m.type_out.w, m.type_out.h },
+   }
+
+   if hs then return R.HS(new_m) else return new_m end
 end
 
 function translate.lambda(m, hs)

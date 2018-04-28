@@ -150,6 +150,13 @@ dump["C.sum"] = function(m)
                        dump(m.inputType.list[1]), dump(m.outputType), async))
 end
 
+dump["C.multiply"] = function(m)
+   local async = m.name:match("async_(.*)")
+   local str = "R.modules.mult{ inType = %s, outType = %s, async = %s }"
+   s[#s+1] = newvar(m, str:format(
+                       dump(m.inputType.list[1]), dump(m.outputType), async))
+end
+
 dump["C.cast"] = function(m)
    s[#s+1] = newvar(m, string.format("C.cast(%s, %s)",
                                      dump(m.inputType), dump(m.outputType)))
@@ -250,9 +257,9 @@ function dump.index(m)
 end
 
 function dump.constSeq(m)
-   local str = "R.modules.constSeq{ type = %s, P = %s, value = { %s } }"
+   local str = "R.modules.constSeq{ type = %s, P = %s, value = { { %s } } }"
    local typ = string.format("R.array2d(%s, %s, %s)", dump(m.A), m.w, m.h)
-   s[#s+1] = newvar(m, str:format(typ, m.T, table.concat(m.value, ", ")))
+   s[#s+1] = newvar(m, str:format(typ, m.T, table.concat(m.value[1], ", ")))
 end
 
 function dump.map(m)
@@ -313,10 +320,22 @@ function dump.changeRate(m)
    s[#s+1] = newvar(m, string.format("R.modules.changeRate{ type = %s, H = %s, inW = %s, outW = %s }", dump(m.type), m.H, m.inputRate, m.outputRate))
 end
 
+function dump.SoAtoAoS(m)
+   local types = {}
+   for i,t in ipairs(m.outputType.over.list) do
+      types[i] = dump(t)
+   end
+
+   s[#s+1] = newvar(m, string.format("R.modules.SoAtoAoS{ type = { %s }, size = { %s } }", table.concat(types, ", "), table.concat(m.outputType.size, ", ")))
+end
+
 function dump.lambda(l)
    if l.name:find("map") then
       print(inspect(l, {depth = 2}))
       assert(false)
+   elseif l.name:find("SoAtoAoS") then
+      dump.SoAtoAoS(l)
+      return
    end
 
    dump(l.input)

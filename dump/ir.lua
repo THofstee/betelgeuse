@@ -29,6 +29,7 @@ local s = {}
 local dump = {}
 local dump_mt = {
    __call = function(t, m)
+      assert(m)
       if rawget(ids, m) then return ids[m] end
 
       if _VERBOSE then log.trace("dump." .. m.kind) end
@@ -122,7 +123,7 @@ function dump.trunc(m)
 end
 
 function dump.zip(m)
-   s[#s+1] = newvar(m, string.format("I.zip(%s)", dump(m.m)))
+   s[#s+1] = newvar(m, string.format("I.zip()"))
 end
 
 function dump.partition(m)

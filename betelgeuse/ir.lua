@@ -163,7 +163,7 @@ function IR.zip()
       for i,t  in ipairs(t.ts) do
          types[i] = t.t
       end
-      return IR.array2d(L.tuple(types), w, h)
+      return IR.array2d(IR.tuple(types), w, h)
    end
 
    local function perf_func(t)
@@ -173,7 +173,7 @@ function IR.zip()
       for i,t  in ipairs(t.ts) do
          perfs[i] = t.t
       end
-      return IR.array2d(L.tuple(perfs), w, h)
+      return IR.array2d(IR.tuple(perfs), w, h)
    end
 
    return C.zip(type_func, perf_func)

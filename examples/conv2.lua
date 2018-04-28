@@ -39,29 +39,27 @@ local mod = L.lambda(m, I)
 
 -- G(mod)
 
--- translate to rigel and optimize
-local res
 local util = P.reduction_factor(mod, rate)
-res = P.translate(mod)
-res = P.transform(res, util)
-res = P.streamify(res, rate)
-res = P.peephole(res)
+G(P.transform(P.translate(mod), util))
+-- optimize
+local res = P.opt(mod, rate)
 G(res)
-res = P.make_mem_happy(res)
 
--- call harness
-local in_size = { L.unwrap(mod).x.t.w, L.unwrap(mod).x.t.h }
-local out_size = { L.unwrap(mod).f.type.w, L.unwrap(mod).f.type.h }
+-- translate to rigel and run
+local r,s = P.rigel(res)
+G(r)
 
-local fname = arg[0]:match("([^/]+).lua")
+local D = require 'dump'
+local function write_to_file(filename, str)
+   local f = assert(io.open(filename, "w"))
+   f:write(str)
+   f:close()
+end
+write_to_file("dbg/dump-ir.lua", D(res))
+write_to_file("dbg/dump-rigel.lua", D(r))
+G(assert(loadstring(D(r)))())
 
-R.harness{
-   fn = res,
-   -- inFile = "box_32.raw", inSize = in_size,
-   inFile = "1080p.raw", inSize = in_size,
-   outFile = fname, outSize = out_size,
-   earlyOverride = 4800, -- downsample is variable latency, overestimate cycles
-}
+s("1080p.raw")
 
--- return the pre-translated module
+-- return the unoptimized module
 return mod

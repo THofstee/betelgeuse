@@ -61,6 +61,7 @@ end
 local _VERBOSE = false
 
 local function is_handshake(t)
+   print(t)
    if t:isNamed() and t.generator == 'Handshake' then
       return true
    elseif t.kind == 'tuple' and is_handshake(t.list[1]) then
@@ -252,6 +253,8 @@ local function streamify(m, elem_rate)
    local elem_rate = elem_rate or { 1, 1 }
    local elem_size = elem_rate[1]
    local elem_rate = { 1, elem_rate[2] }
+
+   print(inspect(m, {depth = 2}))
 
    local t_in, w_in, h_in
    if is_handshake(m.inputType) then
