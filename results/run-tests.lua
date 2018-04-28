@@ -9,7 +9,7 @@ G.render = false
 local log = require 'log'
 log.level = 'warn'
 
-local mode = 'axi'
+local mode = 'verilator'
 local clean_after_test = false
 
 local lfs = require 'lfs'
@@ -18,7 +18,7 @@ lfs.chdir('examples')
 -- os.execute('make clean')
 
 local examples = {
-   'updown',     -- upsample -> downsample
+   -- 'updown',     -- upsample -> downsample
    'box_filter', -- like a convolution but no weights
    -- 'conv2',      -- convolution
    -- 'strided',    -- strided convolution
@@ -77,7 +77,7 @@ for _,example in ipairs(examples) do
       -- { 1, 16 },
       -- { 1,  8 },
       -- { 1,  4 },
-      -- { 1,  2 },
+      { 1,  2 },
       { 1,  1 },
       -- { 2,  1 },
       -- { 4,  1 },
@@ -160,7 +160,7 @@ for _,example in ipairs(examples) do
          local s = assert(f:read('*a'))
          f:close()
 
-         -- get area       
+         -- get area
          -- local f = io.open('out/' .. filename .. '_zynq20vivado/utilization.txt')
          -- local s = f:read('*a')
          -- f:close()

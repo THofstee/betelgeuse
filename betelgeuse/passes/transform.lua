@@ -237,10 +237,11 @@ function reduce_rate.reduce_x(m, util)
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
 
-   local new_h = math.ceil(h/par)
-   par = par/(h/new_h)
-   local new_w = math.ceil(w/par)
-   par = par/(w/new_w)
+   -- @todo: should it be w first then h or h then w?
+   local new_w = w/math.ceil(w/par)
+   par = par/new_w
+   local new_h = h/math.ceil(h/par)
+   par = par/new_h
 
    local input = IR.input(m.type_in)
    local in_rate = IR.apply(IR.partition({ new_w, new_h }), input)

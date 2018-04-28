@@ -271,7 +271,7 @@ end
 function dump.reduceSeq(m)
    dump(m.fn)
    local str = "R.modules.reduceSeq{ fn = %s, V = %s }"
-   s[#s+1] = newvar(m, str:format(ids[m.fn], m.T))
+   s[#s+1] = newvar(m, str:format(ids[m.fn], 1/m.T))
 end
 
 function dump.makeHandshake(m)

@@ -165,6 +165,12 @@ function dump.stencil_x(m)
                                      m.extent_x, m.extent_y))
 end
 
+function dump.stencil_t(m)
+   s[#s+1] = newvar(m, string.format("I.stencil_t(%s, %s, %s, %s)",
+                                     m.offset_x, m.offset_y,
+                                     m.extent_x, m.extent_y))
+end
+
 function dump.pad_t(m)
    s[#s+1] = newvar(m, string.format("I.pad_t(%s, %s, %s, %s)",
                                      m.left, m.right, m.top, m.bottom))

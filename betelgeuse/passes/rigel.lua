@@ -398,6 +398,7 @@ end
 
 function translate.stencil_x(m, hs)
    local par = 1 -- @todo: this is wrong, needs original image size
+
    local new_m = R.modules.linebuffer{
       type = translate(m.type_in.t, false),
       V = par,
@@ -407,6 +408,32 @@ function translate.stencil_x(m, hs)
    }
 
    -- print(inspect(m, {depth = 2}))
+   -- print(inspect(new_m, {depth = 2}))
+   -- assert(false)
+
+   return new_m
+end
+
+function translate.stencil_t(m, hs)
+   print(m.type_in)
+   print(m.type_out)
+   local par = 1 -- @todo: this is wrong, needs original image size
+
+   local new_m = R.modules.linebuffer{
+      type = translate(m.type_in.t, false),
+      V = 1,
+      -- size = { m.type_in.w, m.type_in.h }, -- @todo: this is wrong, needs original image size
+      size = { 1920, 1080 }, -- @todo: this is wrong, needs original image size
+      stencil = { -m.extent_x+1, 0, -m.extent_y+1, 0 } -- @todo: total hack
+   }
+
+   -- local
+
+   print(new_m.inputType)
+   print(new_m.outputType)
+   -- assert(false)
+
+   print(inspect(m, {depth = 2}))
    -- print(inspect(new_m, {depth = 2}))
    -- assert(false)
 
@@ -456,14 +483,13 @@ end
 function translate.reduce_t(m, hs)
    local new_m = R.modules.reduceSeq{
       fn = translate(m.m, false),
-      V = 1,
+      V = m.size[1] * m.size[2],
    }
 
    if hs then return R.HS(new_m) else return new_m end
 end
 
 function translate.reduce_x(m, hs)
-   print(inspect(m.size))
    local new_m = R.modules.reduce{
       fn = translate(m.m, false),
       size = m.size, -- @todo: this is wrong, needs to be parallel reduce size not input element size
