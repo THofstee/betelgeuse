@@ -203,9 +203,9 @@ function reduce_rate.concat(m, util)
       if util[1]/util[2] ~= 1 then
          local r = util[2]/util[1]
          local new_h = math.ceil(input.type.h/r)
-         r = math.ceil(r/new_h)
+         r = math.ceil(r/(input.type.h/new_h))
          local new_w = math.ceil(input.type.w/r)
-         r = math.ceil(r/new_w)
+         r = math.ceil(r/(input.type.w/new_w))
          inputs[i] = IR.apply(IR.partition({ new_w, new_h }), inputs[i])
       end
    end
