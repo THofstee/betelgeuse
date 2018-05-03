@@ -27,6 +27,7 @@ Module = add
        | shift(number n) # @todo: this is an expanding shift?
        | trunc(number n)
        | zip
+       | unzip
 # @todo: should all these modules that take in table size just take in two numbers x and y as parameters instead?
        | partition(table counts)
        | flatten(table size)
@@ -68,6 +69,8 @@ end
 IR.tuple = memoize(IR.tuple)
 
 function IR.array2d(t, w, h)
+   assert(math.ceil(w) == w, "fractional array sizes not allowed")
+   assert(math.ceil(h) == h, "fractional array sizes not allowed")
    return C.array2d(t, w, h)
 end
 IR.array2d = memoize(IR.array2d)
@@ -179,6 +182,30 @@ function IR.zip()
    return C.zip(type_func, perf_func)
 end
 
+function IR.unzip()
+   local function type_func(t)
+      local w = t.w
+      local h = t.h
+      local types = {}
+      for i,t  in ipairs(t.t.ts) do
+         types[i] = IR.array2d(t, w, h)
+      end
+      return IR.tuple(types)
+   end
+
+   local function perf_func(t)
+      local w = t.w
+      local h = t.h
+      local types = {}
+      for i,t  in ipairs(t.t.ts) do
+         types[i] = IR.array2d(t, w, h)
+      end
+      return IR.tuple(types)
+   end
+
+   return C.unzip(type_func, perf_func)
+end
+
 local size_mt = {
    __eq = function(self, other)
       if #self ~= #other then return false end
@@ -196,7 +223,7 @@ function IR.partition(n)
    end
 
    local function perf_func(t)
-      return IR.array2d(IR.array2d(t.t, n[1], n[2]), t.w/n[1], t.h/n[2])
+      return IR.array2d(IR.array2d(t.t, n[1], n[2]), 1, 1)
    end
 
    return C.partition(setmetatable(n, size_mt), type_func, perf_func)
@@ -254,7 +281,9 @@ function IR.map_t(f, n)
    local function perf_func(t)
       -- @todo: should this be t.w and t.h or should it just be n?
       -- @todo: does map_x go from A[w,h] -> B[w,h] in chunks of n, or just from A[n] -> B[n]?
-      return IR.array2d(f.type_func(t.t), t.w, t.h)
+      -- print(t.w, t.h)
+      -- assert(t.w == 1 and t.h == 1, 'map_t expected [1,1] input')
+      return IR.array2d(f.type_func(t.t), n[1], n[2])
    end
 
    local res = C.map_t(f, n, type_func, perf_func)
@@ -439,12 +468,12 @@ end
 
 function IR.lambda(f, x)
    local function type_func(t)
-      assert(t == x.type, string.format('Type of input (%s) does not match expected type (%s)', t, x.type))
+      assert(tostring(t) == tostring(x.type), string.format('Type of input (%s) does not match expected type (%s)', t, x.type))
       return f.type
    end
 
    local function perf_func(t)
-      assert(t == x.perf, string.format('Perf of input (%s) does not match expected type (%s)', t, x.perf))
+      assert(tostring(t) == tostring(x.perf), string.format('Perf of input (%s) does not match expected type (%s)', t, x.perf))
       return f.perf
    end
 

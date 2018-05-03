@@ -57,7 +57,7 @@ local function write_to_file(filename, str)
 end
 write_to_file("dbg/dump-ir.lua", D(res))
 write_to_file("dbg/dump-rigel.lua", D(r))
-G(assert(loadstring(D(r)))())
+-- G(assert(loadstring(D(r)))())
 
 s("1080p.raw")
 

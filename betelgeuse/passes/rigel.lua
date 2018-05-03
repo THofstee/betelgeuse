@@ -126,10 +126,11 @@ end
 function translate.tuple(t, hs)
    local translated = {}
    for i, typ in ipairs(t.ts) do
-      translated[i] = translate(typ, hs)
+      translated[i] = translate(typ, false)
    end
 
-   return R.tuple(translated)
+   local tup = R.tuple(translated)
+   if hs then return R.HS(tup) else return tup end
 end
 
 function translate.input(x, hs)
@@ -170,7 +171,7 @@ function translate.const(x, hs)
    else
       return R.constant{
          type = translate(x.type, false),
-         value = x.v,
+         value = flatten(x.v),
       }
    end
 end
@@ -418,7 +419,8 @@ function translate.downsample_t(m, hs)
 end
 
 function translate.stencil_x(m, hs)
-   local par = 1 -- @todo: this is wrong, needs original image size
+   -- print(inspect(m, {depth = 2}))
+   local par = m.perf_out.w * m.perf_out.h -- @todo: this is wrong, needs original image size
 
    local new_m = R.modules.linebuffer{
       type = translate(m.type_in.t, false),
@@ -531,16 +533,18 @@ end
 
 function translate.apply(x, hs)
    local v = translate(x.v, hs)
+   x.m.type_override = v.type
    local m = translate(x.m, hs)
    print('================')
    print('================')
    print('================')
    print('================')
-   print(hs)
-   print(inspect(x.v, {depth = 2}))
-   print(inspect(x.m, {depth = 2}))
-   print(inspect(v, {depth = 2}))
-   print(inspect(m, {depth = 2}))
+   -- print(inspect(x.v, {depth = 2}))
+   -- print(inspect(x.m, {depth = 2}))
+   -- print(inspect(v, {depth = 2}))
+   -- print(inspect(m, {depth = 2}))
+   print(m.inputType)
+   print(x.m.kind)
 
    return R.connect{
       input = translate(x.v, hs),
@@ -566,8 +570,19 @@ end
 function translate.concat(x, hs)
    local translated = {}
    for i,v in ipairs(x.vs) do
-      print(inspect(v, {depth = 2}))
       translated[i] = translate(v, hs)
+
+      if translate(v.perf, hs) ~= translated[i].type then
+         translated[i] = R.connect{
+            input = translated[i],
+            toModule = R.HS(
+               C.cast(
+                  translated[i].type.params.A,
+                  translate(v.perf, false)
+               )
+            )
+         }
+      end
    end
 
    if hs then
@@ -579,9 +594,30 @@ function translate.concat(x, hs)
 end
 
 function translate.zip(m, hs)
+   -- print(inspect(m, {depth = 2}))
+   -- print(inspect(m.type_override.params.A.list))
+   if m.perf_out.w == 1 and m.perf_out.h == 1 then
+      print(inspect(m.perf_out, {depth = 2}))
+
+      -- local types = {}
+      -- local size
+      -- for i,t in ipairs(m.type_override.params.A.list) do
+      --    types[i] = t.over
+      --    size = t.size
+      -- end
+
+      -- local new_m = R.modules.SoAtoAoS{
+      --    type = types,
+      --    size = size,
+      -- }
+
+      -- if hs then return R.HS(new_m) else return new_m end
+   end
+
+   -- print(m.type_out.w, m.type_out.h)
    local new_m = R.modules.SoAtoAoS{
-      type = translate(m.type_out.t, false).list,
-      size = { m.type_out.w, m.type_out.h },
+      type = translate(m.perf_out.t, false).list,
+      size = { m.perf_out.w, m.perf_out.h },
    }
 
    if hs then return R.HS(new_m) else return new_m end

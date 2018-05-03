@@ -40,7 +40,6 @@ local function fuse(m)
          end
 
          for _,v in ipairs(inputs) do
-            print("aeiou", inspect(v, {depth = 2}))
             if v.kind ~= 'select' then
                return I.concat(unpack(inputs))
             end

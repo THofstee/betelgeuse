@@ -199,35 +199,32 @@ function reduce_rate.concat(m, util)
    local inputs = {}
    for i,input in ipairs(m.vs) do
       inputs[i] = reduce_rate(input, util)
+
+      if util[1]/util[2] ~= 1 then
+         local r = util[2]/util[1]
+         local new_h = math.ceil(input.type.h/r)
+         r = math.ceil(r/new_h)
+         local new_w = math.ceil(input.type.w/r)
+         r = math.ceil(r/new_w)
+         inputs[i] = IR.apply(IR.partition({ new_w, new_h }), inputs[i])
+      end
    end
 
-   return IR.concat(unpack(inputs))
+   local res = IR.concat(unpack(inputs))
+
+   if res.type ~= m.type then
+      res = IR.apply(IR.zip(), res)
+      res = IR.apply(IR.map_t(IR.zip(), { 1, 1 }), res)
+      res = IR.apply(IR.flatten({ 1, 2 }), res)
+      res = IR.apply(IR.unzip(), res)
+   end
+
+   return res
 end
 
 function reduce_rate.select(m, util)
    return IR.select(reduce_rate(m.v, util), m.n)
 end
-
--- function reduce_rate.concat(m, util)
---    for i,input in ipairs(m.inputs) do
---       local in_type = base(input).outputType
---       -- log.trace(inspect(in_type, {depth = 2}))
---    end
-
---    -- local inputs = {}
---    -- for i,input in ipairs(m.inputs) do
---    --    inputs[i] = reduce_rate(input, util)
---    --    inputs[i] = R.fifo{
---    --       input = inputs[i],
---    --       depth = 128,
---    --    }
---    --    -- R.connect{
---    --    --    input = inputs[i],
---    --    --    toModule =
---    -- end
-
---    return R.concat(inputs)
--- end
 
 function reduce_rate.reduce_x(m, util)
    local w = m.size[1]
@@ -262,8 +259,15 @@ function reduce_rate.map_x(m, util)
    local par = math.ceil(max_reduce * util[1]/util[2])
    par = divisor(max_reduce, par)
 
+   -- @todo: double check usage of new_w and new_h vs par here
+   local r = util[2]/util[1]
+   local new_h = math.ceil(h/r)
+   r = r / (h/new_h)
+   local new_w = math.ceil(w/r)
+   r = r / (w/new_w)
+
    local input = IR.input(m.type_in)
-   local in_rate = IR.apply(IR.partition({ par, 1 }), input)
+   local in_rate = IR.apply(IR.partition({ new_w, new_h }), input)
 
    -- @todo: effective_rate is the wrong name for this variable. what it really is describing is a notification that "we have exhausted the parallelism available to us in this module, and we would like to reduce the rate even further". For example if par is 1, then max_reduce/par = max_reduce. If we want to reduce to less than the equivalent of 1/max_reduce, then this value will be less than 1.
    -- @todo: the above provides a rather compelling argument to normalize util to 1 w.r.t. some term. e.g. {2, 4} becomes {1, 2}, {8, 1} stays as {8, 1}
@@ -276,8 +280,8 @@ function reduce_rate.map_x(m, util)
       -- print(inspect(newm, {depth = 2}))
       log.warn('not sure if this is doing the right thing...')
       local a = IR.map_t(newm, m.size)
-      local inter = IR.apply(IR.map_t(a, { par, 1}), in_rate)
-      local out_rate = IR.apply(IR.flatten({ par, 1}), inter)
+      local inter = IR.apply(IR.map_t(a, { new_w, new_h}), in_rate)
+      local out_rate = IR.apply(IR.flatten({ new_w, new_h}), inter)
       return IR.lambda(out_rate, input)
 
       -- -- we would still like to further reduce parallelism, reduce inner module
@@ -311,7 +315,7 @@ function reduce_rate.map_x(m, util)
       if par == 1 then
          m = IR.map_t(m.m, { par, 1 })
       else
-         m = IR.map_x(m.m, { par, 1 })
+         m = IR.map_x(m.m, { new_w, new_h })
       end
 
       local inter = IR.apply(IR.map_t(m, { par, 1 }), in_rate)
@@ -320,59 +324,8 @@ function reduce_rate.map_x(m, util)
    end
 end
 
-function reduce_rate.SoAtoAoS(m, util)
-   log.warn('@todo: implement')
-   local input
-   if DONT then
-      input = m.inputs[1]
-   else
-      input = reduce_rate(m.inputs[1], util)
-   end
-
-   local m = m.fn
-   local t = m.inputType
-
-   if input.kind == 'apply' and input.fn.kind == 'packTuple' and input.inputs[1].kind == 'concat' then
-      local size = m.outputType.params.A.size
-
-      local max_reduce = size[1]*size[2]
-      local par = math.ceil(max_reduce * util[1]/util[2])
-      par = divisor(max_reduce, par)
-
-      local streams_in = {}
-      local hack = {}
-      local hack2 = {}
-
-      -- [4,4][32,32] -> [4,4][1,1] -> [1,1]
-
-      for i,inpt in ipairs(input.inputs[1].inputs) do
-         streams_in[i] = change_rate(inpt, { par, 1 })
-         hack[i] = streams_in[i].type.params.A
-         hack2[i] = hack[i].over
-      end
-
-      local inter = R.connect{
-         input = R.concat(streams_in),
-         toModule = RM.packTuple(hack)
-      }
-
-      local inter2 = R.connect{
-         input = inter,
-         toModule = R.HS(
-            R.modules.SoAtoAoS{
-               type = hack2,
-               size = { par, 1 }
-            }
-         )
-      }
-
-      return change_rate(inter2, size)
-   end
-
-   return R.connect{
-      input = input,
-      toModule = R.HS(m)
-   }
+function reduce_rate.zip(m, util)
+   return m
 end
 
 function reduce_rate.broadcast(m, util)

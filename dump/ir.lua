@@ -126,6 +126,10 @@ function dump.zip(m)
    s[#s+1] = newvar(m, string.format("I.zip()"))
 end
 
+function dump.unzip(m)
+   s[#s+1] = newvar(m, string.format("I.unzip()"))
+end
+
 function dump.partition(m)
    s[#s+1] = newvar(m, string.format("I.partition({ %s })",
                                      table.concat(m.counts, ", ")))
